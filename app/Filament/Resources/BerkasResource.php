@@ -36,6 +36,10 @@ use Filament\Tables\Columns\Layout\Panel;
 // use Filament\Support\Enums\FontWeight;
 use Filament\Tables\Columns\Layout\Stack;
 use Filament\Forms\Components\Hidden;
+use Illuminate\Support\Str;
+use Filament\Forms\Components\Actions;
+use Filament\Forms\Components\Actions\Action as FormAction;
+use Filament\Facades\Filament;
 
 class BerkasResource extends Resource
 {
@@ -52,7 +56,21 @@ class BerkasResource extends Resource
     {
         return $form
             ->schema([
+                TextInput::make('customer_name')
+                    ->label('Customer Name')
+                    ->placeholder('mis. Suzuki')
+                    ->datalist(['Suzuki', 'Yamaha', 'FCC Indonesia', 'Astemo', 'IMC']) 
+                    ->maxLength(100)
+                    ->required(),
+
+                TextInput::make('model')
+                    ->label('Model')
+                    ->placeholder('mis. YTB')
+                    ->datalist(['YTB'])
+                    ->maxLength(100),
+
                 TextInput::make('kode_berkas')
+                    ->label('Part No')
                     ->required(),
 
                 FileUpload::make('thumbnail')
@@ -60,17 +78,17 @@ class BerkasResource extends Resource
                     ->image()
                     ->imageEditor()
                     ->imageEditorAspectRatios([
-                        null => 'Bebas',
+                        null  => 'Bebas',
                         '1:1' => 'Persegi',
                         '4:3' => '4:3',
-                        '16:9' => '16:9',
+                        '16:9'=> '16:9',
                     ])
                     ->imageResizeMode('cover')
                     ->imageResizeUpscale(false)
                     ->disk('public')
                     ->directory('berkas/thumbnails')
                     ->imagePreviewHeight('150')
-                    ->openable()
+                    ->openable()          // thumbnail tetap public
                     ->downloadable()
                     ->visibility('public')
                     ->preserveFilenames()
@@ -78,31 +96,50 @@ class BerkasResource extends Resource
                     ->nullable(),
 
                 TextInput::make('nama')
+                    ->label('Part Name')
                     ->required(),
-                TextInput::make('detail'),
+                TextInput::make('detail')
+                    ->placeholder('mis. Document')
+                    ->datalist(['Document', 'Part']),
 
                 TagsInput::make('keywords')
-                    ->label('Kata Kunci (Berkas)')
+                    ->label('Kata Kunci Part')
                     ->placeholder('Ketik lalu Enter')
                     ->separator(',')
                     ->reorderable()
                     ->columnSpanFull(),
 
+                // ===== Dokumen (PRIVATE) =====
                 FileUpload::make('dokumen')
-                    ->disk('public')
+                    ->label('Dokumen')
+                    ->disk('private')
                     ->directory('berkas')
-                    ->visibility('public')
                     ->preserveFilenames()
+                    ->rules(['file'])
                     ->previewable(true)
-                    ->downloadable()
-                    ->rules(['nullable', 'file'])
-                    ->required(),
+                    ->downloadable(false) // JANGAN generate URL publik
+                    ->openable(false)     // JANGAN open via Storage::url
+                    ->getUploadedFileNameForStorageUsing(fn ($file) =>
+                        now()->format('Ymd_His') . '-' . Str::random(6) . '-' . $file->getClientOriginalName()
+                    )
+                    ->required(fn (string $context) => $context === 'create')
+                    ->hintAction(
+                        FormAction::make('openFile')
+                            ->label('Buka file')
+                            ->url(
+                                fn ($record) => ($record && $record->dokumen)
+                                    ? route('media.berkas', $record) // /media/berkas/{berkas}
+                                    : null,
+                                shouldOpenInNewTab: true
+                            )
+                            ->visible(fn ($record) => filled($record?->dokumen))
+                    ),
 
-                    // =========================
-                    // Lampiran (induk + anak)
-                    // =========================
-                    Section::make('Lampiran')
-                        ->description('Kelola lampiran melalui tombol "Lampiran" / "Kelola Lampiran" di tabel.')
+                // =========================
+                // Lampiran (disarankan kelola via tabel/aksi)
+                // =========================
+                \Filament\Forms\Components\Section::make('Lampiran')
+                    ->description('Kelola lampiran melalui tombol "Lampiran" / "Kelola Lampiran" di tabel.'),
             ]);
     }
 
@@ -110,7 +147,25 @@ class BerkasResource extends Resource
     {
         return $table
             ->columns([
-                TextColumn::make('kode_berkas')->label('Kode Berkas')->sortable(),
+                TextColumn::make('customer_name')
+                    ->label('Cust Name')
+                    ->sortable()
+                    ->searchable()
+                    ->limit(16)
+                    ->tooltip(fn (?string $state) => $state)
+                    ->grow(false)                                   // << kunci agar tidak melebar
+                    ->width('8rem')                                 // opsional, bisa 7–10rem
+                    ->extraHeaderAttributes(['class' => 'w-[8rem]'])
+                    ->extraCellAttributes([
+                        'class' => 'w-[8rem] max-w-[8rem] whitespace-nowrap truncate',
+                    ]),
+
+                TextColumn::make('model')
+                    ->label('Model')
+                    ->sortable()
+                    ->searchable(),
+
+                TextColumn::make('kode_berkas')->label('Part No')->sortable(),
                 ImageColumn::make('thumbnail')
                     ->label('')
                     ->disk('public')
@@ -125,26 +180,21 @@ class BerkasResource extends Resource
                     ->defaultImageUrl(asset('images/placeholder.png'))
                     ->sortable(false)
                     ->searchable(false),
-                TextColumn::make('nama')->label('Nama')->sortable(),
+                TextColumn::make('nama')->label('Part Name')->sortable(),
                 TextColumn::make('detail')->label('Detail')->limit(80),
                 ViewColumn::make('keywords_display')
                     ->label('Kata Kunci')
                     ->state(fn ($record) => $record->keywords)
                     ->view('tables.columns.keywords-grid'),
-                TextColumn::make('dokumen_link')          // <- kolom virtual, bukan field DB
+                TextColumn::make('dokumen_link')
                     ->label('File')
-                    ->state(fn ($record) => $record->dokumen ? '📂 Lihat File' : '-') 
-                    ->url(
-                        fn ($record) => $record->dokumen
-                            ? asset('storage/'.$record->dokumen)
-                            : null,
-                        shouldOpenInNewTab: true
-                    )
-                ->color(fn ($record) => $record->dokumen ? 'primary' : null)
-                ->extraAttributes(['class' => 'text-blue-600 hover:underline'])
-                ->sortable(false)
-                ->searchable(false),
-
+                    ->state(fn ($record) => $record->dokumen ? '📂' : '-')
+                    ->url(fn ($record) => $record->dokumen ? route('media.berkas', $record) : null, shouldOpenInNewTab: true)
+                    ->color(fn ($record) => $record->dokumen ? 'primary' : null)
+                    ->extraAttributes(['class' => 'text-blue-600 hover:underline'])
+                    ->extraCellAttributes(['class' => 'text-xs'])   // <<< kecilkan font
+                    ->sortable(false)
+                    ->searchable(false),
                 ])
                 ->filters([
                     Filter::make('q')
@@ -179,6 +229,8 @@ class BerkasResource extends Resource
 
                                 // ====== BERKAS (kolom string biasa) ======
                                 $q2->whereRaw('LOWER(berkas.kode_berkas) LIKE ?', [$likeLower])
+                                ->orWhereRaw('LOWER(berkas.customer_name) LIKE ?', [$likeLower])
+                                ->orWhereRaw('LOWER(berkas.model)         LIKE ?', [$likeLower])
                                 ->orWhereRaw('LOWER(berkas.nama)        LIKE ?', [$likeLower])
                                 ->orWhereRaw('LOWER(berkas.detail)      LIKE ?', [$likeLower])
                                 ->orWhereRaw('LOWER(berkas.dokumen)     LIKE ?', [$likeLower])
@@ -227,6 +279,7 @@ class BerkasResource extends Resource
                         ->label('Lampiran')
                         ->icon('heroicon-m-paper-clip')
                         ->color('gray')
+                        ->size('xs')                   // << kecilkan font
                         ->modalHeading('Lampiran')
                         ->modalSubmitAction(false)
                         ->modalCancelActionLabel('Tutup')
@@ -237,22 +290,27 @@ class BerkasResource extends Resource
            
                     ViewAction::make()
                         ->label('')
-                        ->icon('heroicon-m-eye') // bold eye
-                        ->tooltip('Lihat'), // tooltip saat hover
+                        ->icon('heroicon-m-eye')
+                        ->tooltip('Lihat'),
 
+                    // Edit/Delete: hanya Admin/Editor – gunakan nullsafe (?? false)
                     EditAction::make()
                         ->label('')
-                        ->icon('heroicon-m-pencil') // bold pencil
-                        ->tooltip('Edit'),
+                        ->icon('heroicon-m-pencil')
+                        ->tooltip('Edit')
+                        ->visible(fn () => auth()->user()?->hasAnyRole(['Admin', 'Editor']) ?? false),
 
                     DeleteAction::make()
                         ->label('')
-                        ->icon('heroicon-m-trash') // bold trash
-                        ->tooltip('Hapus'),
+                        ->icon('heroicon-m-trash')
+                        ->tooltip('Hapus')
+                        ->visible(fn () => auth()->user()?->hasAnyRole(['Admin', 'Editor']) ?? false),
                 ])
+            
             ->bulkActions([
-                    Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                Tables\Actions\BulkActionGroup::make([
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->visible(fn () => auth()->user()?->hasAnyRole(['Admin', 'Editor']) ?? false),
                 ]),
             ]);
     }
@@ -274,7 +332,33 @@ class BerkasResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['lampirans']); 
+        $query = parent::getEloquentQuery()
+            ->with(['lampirans']);
+
+        if (optional(\Filament\Facades\Filament::getCurrentPanel())->getId() === 'public') {
+            $query->where('is_public', true);
+        }
+
+        return $query;
     }
 
+    public static function canViewAny(): bool
+    {
+        return optional(\Filament\Facades\Filament::getCurrentPanel())->getId() === 'public'
+            ? true
+            : (auth()->user()?->can('berkas.view') ?? false);
+    }
+
+
+    public static function canCreate(): bool
+    {
+        return auth()->user()?->can('berkas.create') ?? false;
+    }
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return optional(\Filament\Facades\Filament::getCurrentPanel())->getId() === 'public'
+            ? true
+            : (auth()->user()?->can('berkas.view') ?? false);
+    }
 }

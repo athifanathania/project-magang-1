@@ -4,8 +4,6 @@
     'recordAction' => null,
     'recordUrl' => null,
     'striped' => false,
-
-    // dukung dua kemungkinan nama prop dari induk
     'record' => null,
     'recordKey' => null,
 ])
@@ -16,10 +14,11 @@
     $stripedClasses = 'bg-gray-50 dark:bg-white/5';
 
     /** @var null|\Illuminate\Database\Eloquent\Model $record */
-    // pakai record langsung jika dikirim; kalau tidak, resolve dari key (jika tersedia)
     $record = $record ?: ($recordKey && method_exists($this, 'getTableRecord')
         ? $this->getTableRecord($recordKey)
         : $record);
+
+    $isPublic = optional(\Filament\Facades\Filament::getCurrentPanel())->getId() === 'public';
 @endphp
 
 <tr
@@ -38,48 +37,54 @@
         ])
     }}
 >
-    {{-- Caret paling kiri --}}
-    <!-- <td class="w-6 align-top">
-        <button
-            x-data="{ open: false }"
-            x-on:click.stop="
-                open = !open;
-                // toggle baris expandable di bawah baris ini
-                $el.closest('tr').nextElementSibling.classList.toggle('hidden')
-            "
-            x-text="open ? '▾' : '▸'"
-            class="text-gray-500 hover:text-gray-700"
-            type="button"
-            title="Tampilkan / sembunyikan lampiran"
-        >▸</button>
-    </td> -->
-
-    {{-- Sel-sel kolom asli --}}
-    {{ $slot }}
-    </tr>
-
-    {{-- Baris expandable (awalnya tersembunyi) --}}
-    <tr class="hidden" x-data>
-        {{-- Placeholder untuk kolom checkbox (biar align) --}}
-        <td class="px-3 py-3"></td>
-
-        {{-- colspan = jumlah kolom baris utama - 1 (karena ada kolom checkbox) --}}
-        <td
-            x-bind:colspan="
-                Math.max(
-                    1,
-                    $el.closest('tr').previousElementSibling.children.length - 1
-                )
-            "
-            class="px-3 py-3"
-        >
-            @php
-                $lampirans = optional($record)->lampirans ?? collect();
-            @endphp
-
-            @include('tables.rows.lampirans-panel-plain', [
-                'record' => $record,
-                'lampirans' => $lampirans,
-            ])
+    {{-- ⬇️ Caret kiri untuk VIEWER – markup & kelas SAMA persis seperti di selection/checkbox.blade.php --}}
+    @if ($isPublic)
+        <td class="fi-ta-selection-cell px-3 py-4">
+            <div class="flex items-center justify-center gap-2">
+                <button
+                    x-data="{ open: false }"
+                    x-on:click.stop="
+                        open = !open;
+                        $el.closest('tr').nextElementSibling?.classList.toggle('hidden')
+                    "
+                    x-bind:aria-expanded="open.toString()"
+                    class="flex items-center justify-center w-8 h-8 md:w-9 md:h-9
+                           text-2xl md:text-[28px] leading-none select-none
+                           text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded"
+                    type="button"
+                    title="Tampilkan / sembunyikan lampiran"
+                >
+                    <span x-show="!open" aria-hidden="true">▸</span>
+                    <span x-show="open" x-cloak aria-hidden="true">▾</span>
+                </button>
+            </div>
         </td>
-    </tr>
+    @endif
+
+    {{-- sel-sel kolom asli --}}
+    {{ $slot }}
+</tr>
+
+{{-- Baris expandable (panel lampiran) --}}
+<tr class="hidden" x-data>
+    {{-- placeholder untuk kolom caret/checkbox supaya align --}}
+    <td class="px-3 py-3"></td>
+
+    {{-- colspan = jumlah kolom baris utama - 1 --}}
+    <td
+        x-bind:colspan="
+            Math.max(
+                1,
+                $el.closest('tr').previousElementSibling.children.length - 1
+            )
+        "
+        class="px-3 py-3"
+    >
+        @php $lampirans = optional($record)->lampirans ?? collect(); @endphp
+
+        @include('tables.rows.lampirans-panel-plain', [
+            'record' => $record,
+            'lampirans' => $lampirans,
+        ])
+    </td>
+</tr>

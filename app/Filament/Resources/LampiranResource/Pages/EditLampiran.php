@@ -7,6 +7,7 @@ use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
 use Filament\Notifications\Notification;
 use App\Filament\Resources\BerkasResource;
+use Illuminate\Database\Eloquent\Model as EloquentModel;
 
 class EditLampiran extends EditRecord
 {
@@ -38,4 +39,14 @@ class EditLampiran extends EditRecord
             'berkas_id' => $this->record->berkas_id, // boleh dihapus kalau tak dipakai
         ]);
     }
+
+    protected function resolveRecord(string|int $key): EloquentModel
+    {
+        $model = static::getResource()::getModel();
+
+        // Ambil record langsung dari model UTAMA (tanpa join alias 'b')
+        return $model::query()->findOrFail($key);
+    }
+
+
 }

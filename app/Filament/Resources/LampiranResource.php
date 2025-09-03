@@ -15,6 +15,8 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Filament\Forms\Get;
 use Filament\Tables\Columns\TagsColumn;
 use Illuminate\Database\Eloquent\Casts\Attribute;
+use Filament\Forms\Components\Actions\Action as FormAction;
+use App\Models\Berkas;
 
 class LampiranResource extends Resource
 {
@@ -38,7 +40,7 @@ class LampiranResource extends Resource
                 ->searchable()
                 ->preload()
                 ->required()
-                ->default(request('berkas_id')), // prefill dari URL
+                ->default(request('berkas_id')),
 
             Forms\Components\Select::make('parent_id')
                 ->label('Parent (opsional)')
@@ -47,7 +49,7 @@ class LampiranResource extends Resource
                     $berkasId = $get('berkas_id') ?? request('berkas_id');
                     return \App\Models\Lampiran::query()
                         ->when($berkasId, fn($q) => $q->where('berkas_id', $berkasId))
-                        ->when($record, fn($q) => $q->where('id', '!=', $record->id)) // tidak boleh jadi parent dirinya sendiri
+                        ->when($record, fn($q) => $q->where('id', '!=', $record->id))
                         ->orderBy('nama')
                         ->pluck('nama', 'id');
                 })
@@ -55,15 +57,33 @@ class LampiranResource extends Resource
                 ->nullable()
                 ->default(request('parent_id')),
 
-            Forms\Components\TextInput::make('nama')->required()->maxLength(255),
+            Forms\Components\TextInput::make('nama')
+                ->required()
+                ->maxLength(255),
 
+            // ===== File Lampiran (PRIVATE) =====
             Forms\Components\FileUpload::make('file')
-                ->disk('public')->directory('lampiran')
-                ->visibility('public')
+                ->disk('private')
+                ->directory('lampiran')
                 ->preserveFilenames()
-                ->downloadable()
                 ->rules(['nullable', 'file'])
-                ->previewable(),
+                ->previewable(true)
+                ->downloadable(false) // JANGAN generate URL publik
+                ->openable(false)     // JANGAN open via Storage::url
+                ->hintAction(
+                    FormAction::make('openFile')
+                        ->label('Buka file')
+                        ->url(
+                            fn ($record) => ($record && $record->file)
+                                ? route('media.berkas.lampiran', [
+                                    'berkas'  => $record->berkas_id,
+                                    'lampiran'=> $record->id,
+                                ])
+                                : null,
+                            shouldOpenInNewTab: true
+                        )
+                        ->visible(fn ($record) => filled($record?->file))
+                ),
 
             Forms\Components\TagsInput::make('keywords')
                 ->label('Kata Kunci')
@@ -78,7 +98,6 @@ class LampiranResource extends Resource
                             if (json_last_error() === JSON_ERROR_NONE && is_array($j)) {
                                 return array_values(array_filter($j));
                             }
-                            // CSV "a, b, c"
                             return array_values(array_filter(
                                 preg_split('/\s*,\s*/', $v, -1, PREG_SPLIT_NO_EMPTY)
                             ));
@@ -102,8 +121,14 @@ class LampiranResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('berkas.nama')
                     ->label('Berkas')
-                    ->sortable()
-                    // ->extraCellAttributes(['class' => 'max-w-[20rem] whitespace-normal break-words'])
+                    // sort TANPA join lagi (kita sudah join alias `b` di base query)
+                    ->sortable(query: fn (Builder $query, string $direction): Builder =>
+                        $query->orderBy('b.nama', $direction)
+                    )
+                    // searchable juga TANPA join lagi, pakai nama param `search`
+                    ->searchable(query: fn (Builder $query, string $search): Builder =>
+                        $query->where('b.nama', 'like', "%{$search}%")
+                    )
                     ->toggleable(),
 
                 // PENCARIAN: nama + keywords (dalam satu kolom saja)
@@ -175,15 +200,19 @@ class LampiranResource extends Resource
             ->filters([ //
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
+                Tables\Actions\EditAction::make()
+                    ->visible(fn()=>auth()->user()->can('lampiran.update')),
                 Tables\Actions\Action::make('addChild')
                     ->label('Tambah Sub')
                     ->icon('heroicon-m-plus')
                     ->url(fn ($record) => route('filament.admin.resources.lampirans.create', [
                         'parent_id' => $record->id,
                         'berkas_id' => $record->berkas_id,
-                    ])),
-                Tables\Actions\DeleteAction::make(),
+                    ]))
+                    ->visible(fn()=>auth()->user()->can('lampiran.create')),
+
+                Tables\Actions\DeleteAction::make()
+                    ->visible(fn()=>auth()->user()->can('lampiran.delete')),
             ]);
     }
 
@@ -194,6 +223,19 @@ class LampiranResource extends Resource
         ];
     }
 
+    public static function getEloquentQuery(): Builder
+    {
+        $lamp = (new \App\Models\Lampiran)->getTable(); // 'lampirans'
+        $berk = (new \App\Models\Berkas)->getTable();   // 'berkas'
+
+        return parent::getEloquentQuery()
+            ->with(['berkas','parent'])
+            ->leftJoin("{$berk} as b", "{$lamp}.berkas_id", '=', 'b.id')
+            ->select("{$lamp}.*")
+            ->orderBy('b.nama', 'asc')          // default: urut dokumen A–Z
+            ->orderBy("{$lamp}.nama", 'asc');   // opsional: lampiran A–Z
+    }
+
     public static function getPages(): array
     {
         return [
@@ -201,5 +243,20 @@ class LampiranResource extends Resource
             'create' => Pages\CreateLampiran::route('/create'),
             'edit' => Pages\EditLampiran::route('/{record}/edit'),
         ];
+    }
+
+    public static function canViewAny(): bool
+    {
+        return auth()->user()?->can('lampiran.view') ?? false;
+    }
+
+    public static function canCreate(): bool
+    {
+        return auth()->user()?->can('lampiran.create') ?? false;
+    }
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return auth()->user()?->can('lampiran.view') ?? false;
     }
 }

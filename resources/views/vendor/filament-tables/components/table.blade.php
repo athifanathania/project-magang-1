@@ -17,9 +17,14 @@
                 </tr>
             @endif
 
-            <tr class="bg-gray-50 dark:bg-white/5">
-                {{ $header }}
-            </tr>
+            @php $isPublic = optional(\Filament\Facades\Filament::getCurrentPanel())->getId() === 'public'; @endphp
+<tr class="bg-gray-50 dark:bg-white/5">
+    @if ($isPublic)
+        <th class="w-1"></th> {{-- kolom caret (lebar sama seperti kolom checkbox admin) --}}
+    @endif
+    {{ $header }}
+</tr>
+
         </thead>
     @endif
 

@@ -1,6 +1,7 @@
 @php
 use App\Models\Berkas as MBerkas;
 use App\Models\Lampiran as MLampiran;
+use Filament\Facades\Filament;
 
 /** @var mixed $record */
 
@@ -98,6 +99,19 @@ $kelolaUrl  = (isset($record) && $record instanceof MBerkas)
 $tambahUrl  = (isset($record) && $record instanceof MBerkas)
     ? \App\Filament\Resources\LampiranResource::getUrl('create', ['berkas_id' => $record->id])
     : null;
+
+$kelolaUrl  = (isset($record) && $record instanceof MBerkas)
+    ? \App\Filament\Resources\LampiranResource::getUrl('index', ['berkas_id' => $record->id])
+    : null;
+
+$tambahUrl  = (isset($record) && $record instanceof MBerkas)
+    ? \App\Filament\Resources\LampiranResource::getUrl('create', ['berkas_id' => $record->id])
+    : null;
+
+// ✅ CEK HAK AKSES (viewer publik akan false)
+$user = Filament::auth()->user();
+$canViewLampiran   = $user?->can('lampiran.view')   ?? false;
+$canCreateLampiran = $user?->can('lampiran.create') ?? false;
 @endphp
 
 @once
@@ -142,22 +156,21 @@ $tambahUrl  = (isset($record) && $record instanceof MBerkas)
         <div class="flex items-center gap-2">
             <h3 class="text-lg font-semibold text-gray-800">Lampiran</h3>
             <span class="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">
-                {{ $totalLampiranCocok }} dari {{ $totalLampiranSemua }} lampiran
+            {{ $totalLampiranCocok }} dari {{ $totalLampiranSemua }} lampiran
             </span>
         </div>
 
-        @if ($kelolaUrl || $tambahUrl)
+        @if ( ($kelolaUrl && $canViewLampiran) || ($tambahUrl && $canCreateLampiran) )
             <div class="panel-actions">
-                @if ($kelolaUrl)
-                    <a href="{{ $kelolaUrl }}" class="btn-ghost">Kelola Lampiran</a>
-                @endif
-                @if ($tambahUrl)
-                    <a href="{{ $tambahUrl }}" class="btn-ghost">+ Tambah Lampiran</a>
-                @endif
+            @if ($kelolaUrl && $canViewLampiran)
+                <a href="{{ $kelolaUrl }}" class="btn-ghost">Kelola Lampiran</a>
+            @endif
+            @if ($tambahUrl && $canCreateLampiran)
+                <a href="{{ $tambahUrl }}" class="btn-ghost">+ Tambah Lampiran</a>
+            @endif
             </div>
         @endif
-    </div>
-
+        </div>
     @if ($filtered->isEmpty())
         <div class="text-sm text-gray-500">Tidak ada lampiran yang cocok…</div>
     @else

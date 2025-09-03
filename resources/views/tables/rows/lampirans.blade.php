@@ -5,8 +5,13 @@ use Illuminate\Support\Facades\Storage;
 
 /** @var mixed $record */
 
-// 1) Sumber data: utamakan $record (Berkas) → root + children.
-//    Tetap dukung fallback $lampirans (koleksi root) jika $record tidak dikirim.
+/*
+|------------------------------------------------------------------
+| 1) Sumber data: utamakan $record (Berkas) → root + children.
+|    Tetap dukung fallback $lampirans (koleksi root) jika $record
+|    tidak dikirim.
+|------------------------------------------------------------------
+*/
 if (isset($record) && $record instanceof MBerkas) {
     $items = $record->rootLampirans()
         ->with('childrenRecursive')
@@ -18,7 +23,11 @@ if (isset($record) && $record instanceof MBerkas) {
         : collect($lampirans ?? []);
 }
 
-// helper keywords untuk kolom root
+/*
+|------------------------------------------------------------------
+| Helper keywords untuk kolom root
+|------------------------------------------------------------------
+*/
 $normalizeKeywords = function ($raw) {
     if (blank($raw)) return [];
 
@@ -44,7 +53,24 @@ $normalizeKeywords = function ($raw) {
         ->all();
 };
 
-// URL header actions (hanya muncul jika konteks Berkas)
+/*
+|------------------------------------------------------------------
+| Helper cek file: cari di disk 'private' ATAU 'public'
+|------------------------------------------------------------------
+*/
+$existsOnAnyDisk = function (?string $path): bool {
+    $p = ltrim((string) $path, '/');
+    if ($p === '') return false;
+
+    return Storage::disk('private')->exists($p)
+        || Storage::disk('public')->exists($p);
+};
+
+/*
+|------------------------------------------------------------------
+| URL header actions (hanya muncul jika konteks Berkas)
+|------------------------------------------------------------------
+*/
 $kelolaUrl  = (isset($record) && $record instanceof MBerkas)
     ? \App\Filament\Resources\LampiranResource::getUrl('index', ['berkas_id' => $record->id])
     : null;
@@ -76,7 +102,6 @@ $tambahUrl  = (isset($record) && $record instanceof MBerkas)
 </style>
 @endonce
 
-
 <div
   class="p-5"
   x-data="{ opens: {}, toDelete: { id: null, berkasId: null } }"
@@ -93,26 +118,26 @@ $tambahUrl  = (isset($record) && $record instanceof MBerkas)
             </span>
         </div>
         @if ($kelolaUrl || $tambahUrl)
-            <div class="panel-actions">
-                @if ($kelolaUrl)
-                    <a href="{{ $kelolaUrl }}" class="btn-ghost">Kelola Lampiran</a>
-                @endif
-                @if ($tambahUrl)
-                    <a href="{{ $tambahUrl }}" class="btn-ghost">+ Tambah Lampiran</a>
-                @endif
-            </div>
+        <div class="panel-actions">
+            @if ($kelolaUrl && auth()->user()?->can('lampiran.view'))
+            <a href="{{ $kelolaUrl }}" class="btn-ghost">Kelola Lampiran</a>
+            @endif
+            @if ($tambahUrl && auth()->user()?->can('lampiran.create'))
+            <a href="{{ $tambahUrl }}" class="btn-ghost">+ Tambah Lampiran</a>
+            @endif
+        </div>
         @endif
     </div>
 
     @if ($items->isNotEmpty())
         <div class="rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div class="overflow-x-auto">
-                <table class="w-full text-sm table-fixed">   {{-- ← tambah table-fixed --}}
+                <table class="w-full text-sm table-fixed">
                     <colgroup>
                         <col class="w-12" />
                         <col />
-                        <col class="w-[38%]" />                   {{-- ← kecilkan keywords dari 50% ke 38% (atau 40%) --}}
-                        <col class="w-[12rem] min-w-[12rem]" />   {{-- ← kunci lebar kolom Aksi ~192px --}}
+                        <col class="w-[38%]" />
+                        <col class="w-[12rem] min-w-[12rem]" />
                     </colgroup>
                     <thead class="bg-gray-50">
                         <tr class="text-left text-gray-700">
@@ -126,15 +151,22 @@ $tambahUrl  = (isset($record) && $record instanceof MBerkas)
                     <tbody class="divide-y divide-gray-100">
                         @foreach ($items as $i => $lampiran)
                             @php
-                                $nama        = data_get($lampiran, 'nama') ?: '-';
-                                $file        = data_get($lampiran, 'file');
-                                $noFile      = blank($file) || !Storage::disk('public')->exists($file);
-                                $keywords    = $normalizeKeywords(data_get($lampiran, 'keywords'));
-                                $children    = $lampiran->relationLoaded('childrenRecursive')
+                                $nama     = data_get($lampiran, 'nama') ?: '-';
+                                $file     = (string) data_get($lampiran, 'file');
+                                $noFile   = ! $existsOnAnyDisk($file);   // ← hanya merah jika benar2 tak ada
+                                $keywords = $normalizeKeywords(data_get($lampiran, 'keywords'));
+
+                                $children = $lampiran->relationLoaded('childrenRecursive')
                                     ? $lampiran->childrenRecursive
                                     : $lampiran->children()->with('childrenRecursive')->get();
                                 $hasChildren = $children->isNotEmpty();
                                 $rowKey      = $lampiran->id;
+
+                                $editUrl  = \App\Filament\Resources\LampiranResource::getUrl('edit', ['record' => $lampiran]);
+                                $canOpen  = ! $noFile;
+                                $openUrl  = $canOpen
+                                    ? route('media.berkas.lampiran', ['berkas' => $lampiran->berkas_id, 'lampiran' => $lampiran->id])
+                                    : ($editUrl . '?missingFile=1');
                             @endphp
 
                             {{-- ROOT ROW --}}
@@ -165,22 +197,24 @@ $tambahUrl  = (isset($record) && $record instanceof MBerkas)
                                                         'break-words',
                                                         $noFile ? 'text-red-600' : 'text-gray-800',
                                                     ])
-                                                    style="{{ $noFile ? 'color:#dc2626' : '' }}"  {{-- fallback jika kelas Tailwind kepurge --}}
+                                                    style="{{ $noFile ? 'color:#dc2626' : '' }}"
                                                 >
                                                     {{ $nama }}
                                                 </span>
 
                                                 {{-- + Sub khusus root --}}
+                                                @can('create', \App\Models\Lampiran::class)
                                                 <a
-                                                  href="{{ \App\Filament\Resources\LampiranResource::getUrl('create', [
-                                                      'parent_id' => $lampiran->id,
-                                                      'berkas_id' => $lampiran->berkas_id,
-                                                  ]) }}"
-                                                  class="text-xs px-2 py-0.5 rounded border border-gray-200 hover:bg-gray-50"
+                                                    href="{{ \App\Filament\Resources\LampiranResource::getUrl('create', [
+                                                        'parent_id' => $lampiran->id,
+                                                        'berkas_id' => $lampiran->berkas_id,
+                                                    ]) }}"
+                                                    class="text-xs px-2 py-0.5 rounded border border-gray-200 hover:bg-gray-50"
                                                 >+ Sub</a>
+                                                @endcan
                                             </div>
 
-                                            @if ($file)
+                                            @if ($file !== '')
                                                 <div class="text-xs text-gray-500 break-words">{{ $file }}</div>
                                             @endif
                                         </div>
@@ -201,34 +235,24 @@ $tambahUrl  = (isset($record) && $record instanceof MBerkas)
 
                                 <td class="px-4 py-3 whitespace-nowrap text-right">
                                     <div class="inline-flex items-center gap-2">
-                                        @php
-                                            $file = data_get($lampiran, 'file');
-                                            $fileUrl = $file ? \Storage::disk('public')->url($file) : null;
-                                            $editUrl = \App\Filament\Resources\LampiranResource::getUrl('edit', ['record' => $lampiran]);
-                                            $openUrl = $fileUrl ?: ($editUrl . '?missingFile=1');
-                                        @endphp
-
-                                        <a href="{{ $openUrl }}" {{ $fileUrl ? 'target=_blank rel=noopener' : '' }}
-                                        class="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-50 hover:border-blue-200 transition"
-                                        title="{{ $fileUrl ? 'Buka file' : 'Tambahkan file lampiran' }}">
+                                        <a href="{{ $openUrl }}" @if ($canOpen) target="_blank" rel="noopener" @endif
+                                           class="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-50 hover:border-blue-200 transition"
+                                           title="{{ $canOpen ? 'Buka file' : 'Tambahkan file lampiran' }}">
                                             <span>📄</span><span>Buka</span>
                                         </a>
 
-                                        {{-- IKON EDIT --}}
-                                        <a href="{{ $editUrl }}"
-                                        class="ml-2 text-gray-400 hover:text-blue-600 shrink-0"
-                                        title="Edit lampiran"
-                                        @click.stop>
+                                        @can('update', $lampiran)
+                                        <a href="{{ $editUrl }}" class="ml-2 text-gray-400 hover:text-blue-600 shrink-0" title="Edit lampiran" @click.stop>
                                             <x-filament::icon icon="heroicon-m-pencil" class="w-4 h-4" />
                                         </a>
+                                        @endcan
 
-                                        {{-- IKON HAPUS --}}
-                                        <button type="button"
-                                                class="ml-2 text-gray-400 hover:text-red-600 shrink-0"
-                                                title="Hapus lampiran"
+                                        @can('delete', $lampiran)
+                                        <button type="button" class="ml-2 text-gray-400 hover:text-red-600" title="Hapus lampiran"
                                                 @click.stop="$dispatch('set-lampiran-to-delete', { id: {{ $lampiran->id }}, berkasId: {{ $lampiran->berkas_id }} })">
                                             <x-filament::icon icon="heroicon-m-trash" class="w-4 h-4" />
                                         </button>
+                                        @endcan
                                     </div>
                                 </td>
                             </tr>
@@ -242,7 +266,6 @@ $tambahUrl  = (isset($record) && $record instanceof MBerkas)
                                             @include('tables.rows.partials.lampiran-card-node', [
                                                 'lampiran'      => $child,
                                                 'level'         => 1,
-                                                'forceShowSub'  => true,   // <— paksa tampil + Sub untuk semua sub di modal
                                             ])
                                         @endforeach
                                     </td>
@@ -262,6 +285,7 @@ $tambahUrl  = (isset($record) && $record instanceof MBerkas)
             @endif
         </div>
     @endif
+
     <x-filament::modal id="confirm-delete-lampiran" width="md">
         <x-slot name="heading">Hapus lampiran?</x-slot>
         <x-slot name="description">

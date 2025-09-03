@@ -126,71 +126,101 @@
     ])
 >
 @php
-    // --- Deteksi halaman sekarang: apakah List Lampiran? ---
-    $resourceClass = method_exists($this, 'getResource') ? $this->getResource() : null;
+    // --- Deteksi resource/halaman yang sedang dibuka ---
+    $resourceClass  = method_exists($this, 'getResource') ? $this->getResource() : null;
+
+    $isBerkasPage   = ($resourceClass === \App\Filament\Resources\BerkasResource::class)
+        || request()->routeIs('filament.*.resources.berkas.*');
+
     $isLampiranPage = ($resourceClass === \App\Filament\Resources\LampiranResource::class)
         || request()->routeIs('filament.*.resources.lampirans.*');
 
-    // === Hitung LAMPIRAN GLOBAL (selalu tampil) ===
-    $filtersState = method_exists($this, 'getTableFiltersForm')
-        ? $this->getTableFiltersForm()->getRawState()
-        : [];
+    // Hanya tampilkan bar di Berkas/Lampiran (bukan Users, dsb)
+    $showCustomBar  = $isBerkasPage || $isLampiranPage;
 
-    $terms   = collect(data_get($filtersState, 'q.terms', []))
-                ->filter(fn ($t) => is_string($t) && trim($t) !== '')
-                ->map(fn ($t) => mb_strtolower(trim($t)))->values();
-    $modeAll = (bool) data_get($filtersState, 'q.all', false);
+    // Siapkan variabel
+    $lampiranCocokGlobal  = null;
+    $totalLampiranGlobal  = null;
+    $totalBerkas          = null;
+    $filteredBerkas       = null;
 
-    $lampiranQuery = \App\Models\Lampiran::query();
-    if ($terms->isNotEmpty()) {
-        $lampiranQuery->where(function ($q) use ($terms, $modeAll) {
-            $one = function ($sub, string $t) {
-                $like = '%'.mb_strtolower($t).'%';
-                $sub->whereRaw('LOWER(nama) LIKE ?', [$like])
-                    ->orWhereRaw('LOWER(CAST(keywords AS CHAR)) LIKE ?', [$like]);
-            };
-            $modeAll
-                ? $terms->each(fn ($t) => $q->where(fn ($sub) => $one($sub, $t)))
-                : $q->where(fn ($or) => $terms->each(fn ($t) => $or->orWhere(fn ($sub) => $one($sub, $t))));
-        });
-    }
-    $lampiranCocokGlobal = (clone $lampiranQuery)->count();
-    $totalLampiranGlobal = \App\Models\Lampiran::query()->count();
+    if ($showCustomBar) {
+        // === Hitung LAMPIRAN (dipakai di Berkas & Lampiran) ===
+        $filtersState = method_exists($this, 'getTableFiltersForm')
+            ? $this->getTableFiltersForm()->getRawState()
+            : [];
 
-    // === Hitung DOKUMEN hanya jika BUKAN di halaman Lampiran ===
-    $totalBerkas = null;
-    $filteredBerkas = null;
-    if (! $isLampiranPage) {
-        $totalBerkas = method_exists($this, 'getTableQuery')
-            ? $this->getTableQuery()->count()
-            : null;
+        $terms = collect(data_get($filtersState, 'q.terms', []))
+            ->filter(fn ($t) => is_string($t) && trim($t) !== '')
+            ->map(fn ($t) => mb_strtolower(trim($t)))
+            ->values();
 
-        $filteredBerkas = method_exists($this, 'getFilteredTableQuery')
-            ? $this->getFilteredTableQuery()->count()
-            : (isset($records) && method_exists($records, 'total') ? $records->total() : (isset($records) ? $records->count() : null));
+        $modeAll = (bool) data_get($filtersState, 'q.all', false);
+
+        $lampiranQuery = \App\Models\Lampiran::query();
+
+        if ($terms->isNotEmpty()) {
+            $lampiranQuery->where(function ($q) use ($terms, $modeAll) {
+                $apply = function ($sub, string $t) {
+                    $like = '%'.mb_strtolower($t).'%';
+                    $sub->whereRaw('LOWER(nama) LIKE ?', [$like])
+                        ->orWhereRaw('LOWER(CAST(keywords AS CHAR)) LIKE ?', [$like]);
+                };
+
+                if ($modeAll) {
+                    foreach ($terms as $t) {
+                        $q->where(fn ($sub) => $apply($sub, $t));
+                    }
+                } else {
+                    $q->where(function ($or) use ($terms, $apply) {
+                        foreach ($terms as $t) {
+                            $or->orWhere(fn ($sub) => $apply($sub, $t));
+                        }
+                    });
+                }
+            });
+        }
+
+        $lampiranCocokGlobal = (clone $lampiranQuery)->count();
+        $totalLampiranGlobal = \App\Models\Lampiran::query()->count();
+
+        // === Hitung DOKUMEN hanya untuk halaman Berkas ===
+        if ($isBerkasPage) {
+            $totalBerkas = method_exists($this, 'getTableQuery')
+                ? $this->getTableQuery()->count()
+                : null;
+
+            $filteredBerkas = method_exists($this, 'getFilteredTableQuery')
+                ? $this->getFilteredTableQuery()->count()
+                : (isset($records) && method_exists($records, 'total')
+                    ? $records->total()
+                    : (isset($records) ? $records->count() : null));
+        }
     }
 @endphp
 
-<div class="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600">
-    {{-- Dokumen: hanya tampil di halaman Dokumen/Berkas --}}
-    @unless ($isLampiranPage)
-        <span>
-            <strong>Dokumen:</strong>
-            <span class="font-medium">{{ $filteredBerkas }}</span>
-            @isset($totalBerkas)
-                dari <span class="font-medium">{{ $totalBerkas }}</span>
-            @endisset
-        </span>
-        <span class="text-gray-400">|</span>
-    @endunless
+@if ($showCustomBar)
+    <div class="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600">
+        {{-- Dokumen: hanya tampil di halaman Dokumen/Berkas --}}
+        @if ($isBerkasPage)
+            <span>
+                <strong>Dokumen:</strong>
+                <span class="font-medium">{{ $filteredBerkas }}</span>
+                @isset($totalBerkas)
+                    dari <span class="font-medium">{{ $totalBerkas }}</span>
+                @endisset
+            </span>
+            <span class="text-gray-400">|</span>
+        @endif
 
-    {{-- Lampiran: selalu tampil --}}
-    <span>
-        <strong>Lampiran:</strong>
-        <span class="font-medium">{{ $lampiranCocokGlobal }}</span>
-        dari <span class="font-medium">{{ $totalLampiranGlobal }}</span>
-    </span>
-</div>
+        {{-- Lampiran: tampil di Berkas & Lampiran --}}
+        <span>
+            <strong>Lampiran:</strong>
+            <span class="font-medium">{{ $lampiranCocokGlobal }}</span>
+            dari <span class="font-medium">{{ $totalLampiranGlobal }}</span>
+        </span>
+    </div>
+@endif
 
 
     <x-filament-tables::container>

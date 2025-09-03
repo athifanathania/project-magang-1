@@ -44,10 +44,17 @@
         'berkas_id' => $lampiran->berkas_id,
     ]);
 
-    $noFile  = blank($lampiran->file);  // <-- cukup cek kolomnya kosong
-    $fileUrl = $noFile ? null : Storage::disk('public')->url($lampiran->file ?? '');
-    $editUrl = \App\Filament\Resources\LampiranResource::getUrl('edit', ['record' => $lampiran]);
-    $openUrl = $fileUrl ?: ($editUrl . '?missingFile=1');
+    $filePath = trim((string) ($lampiran->file ?? ''));
+    $noFile   = ($filePath === '');
+
+    $editUrl  = \App\Filament\Resources\LampiranResource::getUrl('edit', ['record' => $lampiran]);
+
+    $hasFile  = ! $noFile;
+    $openUrl  = $hasFile
+        ? route('media.berkas.lampiran', ['berkas' => $lampiran->berkas_id, 'lampiran' => $lampiran->id])
+        : null;
+
+    $canUpdate = auth()->user()?->can('update', $lampiran) ?? false;
 
     // === BACA STATE FILTER dari tabel (TagsInput q.terms + toggle q.all)
     $filtersState = method_exists($this, 'getTableFiltersForm')
@@ -139,11 +146,26 @@
 
 @if ($shouldRender)
     <div
-        class="rounded-lg border p-3 mb-2 w-full max-w-full overflow-hidden {{ $indent }} {{ $fileUrl ? 'cursor-pointer hover:bg-blue-50/50' : '' }}"
-        x-data="{ open: false }"
-        {{-- klik di mana saja pada kartu -> buka file (kalau ada) --}}
-        data-file-url="{{ $fileUrl }}"
-        @click="if ($el.dataset.fileUrl) window.open($el.dataset.fileUrl, '_blank')"
+    class="rounded-lg border p-3 mb-2 w-full max-w-full overflow-hidden {{ $indent }} {{ $hasFile ? 'cursor-pointer hover:bg-blue-50/50' : '' }}"
+    x-data="{ open: false }"
+    data-file-url="{{ $hasFile ? $openUrl : '' }}"
+    data-edit-url="{{ (!$hasFile && $canUpdate) ? ($editUrl . '?missingFile=1') : '' }}"
+    @click="
+        // cegah aksi lain di halaman ini
+        $event.stopPropagation();
+        // 1) kalau ada file → buka tab baru dan SELESAI (return)
+        if ($el.dataset.fileUrl) {
+            window.open($el.dataset.fileUrl, '_blank');
+            return;
+        }
+        // 2) kalau tidak ada file & user boleh update → pergi ke edit
+        if ($el.dataset.editUrl) {
+            window.location.assign($el.dataset.editUrl);
+            return;
+        }
+        // 3) viewer tanpa file → tampilkan notif
+        $dispatch('show-no-file', { name: '{{ addslashes($lampiran->nama ?? 'Lampiran') }}' });
+    "
     >
         <div class="flex items-start gap-2">
             {{-- caret hanya kalau ada anak --}}
@@ -173,41 +195,49 @@
                         {{ $lampiran->nama ?? 'Tanpa judul' }}
                     </span>
 
-                    @if ($forceShowSub || auth()->user()?->can('create', \App\Models\Lampiran::class))
-                        <a href="{{ $createUrl }}" @click.stop
+                    @can('create', \App\Models\Lampiran::class)
+                    <a href="{{ $createUrl }}" @click.stop
                         class="text-xs px-2 py-0.5 rounded border border-gray-200 hover:bg-gray-50">
-                            + Sub
-                        </a>
-                    @endif
+                        + Sub
+                    </a>
+                    @endcan
 
-                    {{-- link "Buka" di pojok kanan --}}
-                    <a href="{{ $openUrl }}"
-                        @if ($fileUrl) target="_blank" rel="noopener" @endif
-                        class="ml-auto text-sm font-medium hover:underline"
-                        style="color:#2563eb"
-                        @click.stop
-                        title="{{ $fileUrl ? 'Buka file' : 'Tambahkan file lampiran' }}">
+                    {{-- tombol kanan --}}
+                    <div class="ml-auto flex items-center gap-2">
+                    @if ($hasFile)
+                        <a href="{{ $openUrl }}" target="_blank" rel="noopener"
+                        class="text-sm font-medium hover:underline" style="color:#2563eb"
+                        @click.stop.prevent>
                         Buka
+                        </a>
+                    @elseif ($canUpdate)
+                        <a href="{{ $editUrl }}?missingFile=1"
+                        class="text-sm font-medium hover:underline text-amber-700"
+                        @click.stop>
+                        Tambahkan file
+                        </a>
+                    @else
+                        <button type="button"
+                                class="text-sm font-medium text-gray-500 hover:text-gray-700"
+                                @click.stop.prevent="$dispatch('show-no-file', { name: '{{ addslashes($lampiran->nama ?? 'Lampiran') }}' })">
+                        File belum tersedia
+                        </button>
+                    @endif
+                    </div>
+
+                    @can('update', $lampiran)
+                    <a href="{{ $editUrl }}" class="ml-2 text-gray-400 hover:text-blue-600 shrink-0" title="Edit lampiran" @click.stop>
+                        <x-filament::icon icon="heroicon-m-pencil" class="w-4 h-4" />
                     </a>
-                    {{-- IKON EDIT --}}
-                    <a href="{{ $editUrl }}"
-                    class="ml-2 text-gray-400 hover:text-blue-600 shrink-0"
-                    title="Edit lampiran"
-                    @click.stop>
-                    <x-filament::icon icon="heroicon-m-pencil" class="w-4 h-4" />
-                    </a>
-                    {{-- Hapus --}}
-                    <button
-                    type="button"
-                    class="ml-2 text-gray-400 hover:text-red-600"
-                    title="Hapus lampiran"
-                    @click.stop="$dispatch('set-lampiran-to-delete', {
-                        id: {{ $lampiran->id }},
-                        berkasId: {{ $lampiran->berkas_id }}
-                    })"
-                    >
+                    @endcan
+
+                    @can('delete', $lampiran)
+                    <button type="button" class="ml-2 text-gray-400 hover:text-red-600" title="Hapus lampiran"
+                            @click.stop="$dispatch('set-lampiran-to-delete', { id: {{ $lampiran->id }}, berkasId: {{ $lampiran->berkas_id }} })">
                         <x-filament::icon icon="heroicon-m-trash" class="w-4 h-4" />
                     </button>
+                    @endcan
+
                 </div>
 
                 {{-- tampilkan path file kecil di bawah judul --}}
