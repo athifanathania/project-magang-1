@@ -3,10 +3,12 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\MediaController;
 
-// ❌ HAPUS / KOMENTARI baris ini agar "/" dipakai Dashboard panel publik
-// Route::redirect('/', '/berkas')->name('home');
+// JANGAN redirect / ke /berkas supaya panel publik Filament bisa jalan
+// Route::redirect('/', '/berkas');
 
-// Gateway file publik (tetap aman via Policy)
+//
+// Akses file AKTIF (stream). Boleh publik, tapi tetap lewat Policy (`BerkasPolicy@view`).
+//
 Route::get('/media/berkas/{berkas}', [MediaController::class, 'berkas'])
     ->whereNumber('berkas')
     ->name('media.berkas');
@@ -15,4 +17,15 @@ Route::get('/media/berkas/{berkas}/lampiran/{lampiran}', [MediaController::class
     ->whereNumber(['berkas', 'lampiran'])
     ->name('media.berkas.lampiran');
 
-// Panel admin tetap di /admin (dari AdminPanelProvider)
+//
+// Download VERSI LAMA (history). Hanya untuk user login dengan role Admin/Editor.
+//
+Route::middleware('auth')->group(function () {
+    Route::get('/media/berkas/{berkas}/version/{index}', [MediaController::class, 'berkasVersion'])
+        ->whereNumber(['berkas', 'index'])
+        ->name('media.berkas.version');
+
+    Route::get('/media/lampiran/{lampiran}/version/{index}', [MediaController::class, 'lampiranVersion'])
+        ->whereNumber(['lampiran', 'index'])
+        ->name('media.lampiran.version');
+});

@@ -47,10 +47,10 @@ class BerkasResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
 
-    protected static ?string $navigationLabel = 'Dokumen';
+    protected static ?string $navigationLabel = 'Regular';
 
     protected static ?string $modelLabel = 'dokumen';   // singular
-    protected static ?string $pluralModelLabel = 'Dokumen'; // plural
+    protected static ?string $pluralModelLabel = 'Regular'; // plural
 
     public static function form(Form $form): Form
     {
@@ -163,9 +163,13 @@ class BerkasResource extends Resource
                 TextColumn::make('model')
                     ->label('Model')
                     ->sortable()
+                    ->extraCellAttributes(['class' => 'max-w-[7rem] whitespace-normal break-words'])
                     ->searchable(),
 
-                TextColumn::make('kode_berkas')->label('Part No')->sortable(),
+                TextColumn::make('kode_berkas')
+                    ->label('Part No')
+                    ->extraCellAttributes(['class' => 'max-w-[10rem] whitespace-normal break-words'])
+                    ->sortable(),
                 ImageColumn::make('thumbnail')
                     ->label('')
                     ->disk('public')
@@ -180,12 +184,26 @@ class BerkasResource extends Resource
                     ->defaultImageUrl(asset('images/placeholder.png'))
                     ->sortable(false)
                     ->searchable(false),
-                TextColumn::make('nama')->label('Part Name')->sortable(),
-                TextColumn::make('detail')->label('Detail')->limit(80),
+                TextColumn::make('nama')
+                        ->label('Part Name')
+                        ->sortable()
+                        ->wrap()
+                        ->extraCellAttributes([
+                            'class' => 'max-w-[18rem] whitespace-normal break-words',
+                        ]),
+                TextColumn::make('detail')
+                    ->label('Detail')
+                    ->wrap()
+                    ->extraCellAttributes([
+                        'class' => 'max-w-[14rem] whitespace-normal break-words',
+                    ]),
                 ViewColumn::make('keywords_display')
                     ->label('Kata Kunci')
                     ->state(fn ($record) => $record->keywords)
-                    ->view('tables.columns.keywords-grid'),
+                    ->view('tables.columns.keywords-grid')
+                    ->extraCellAttributes([
+                        'class' => 'max-w-[22rem] whitespace-normal break-words',
+                    ]),
                 TextColumn::make('dokumen_link')
                     ->label('File')
                     ->state(fn ($record) => $record->dokumen ? '📂' : '-')
@@ -291,7 +309,11 @@ class BerkasResource extends Resource
                     ViewAction::make()
                         ->label('')
                         ->icon('heroicon-m-eye')
-                        ->tooltip('Lihat'),
+                        ->tooltip('Lihat')
+                        ->modalContent(function (\App\Models\Berkas $record) {
+                            return view('tables.rows.berkas-view', ['record' => $record]);
+                        // berkas-view.blade.php berisi form readonly + include('tables.rows.berkas-history')
+                        }),
 
                     // Edit/Delete: hanya Admin/Editor – gunakan nullsafe (?? false)
                     EditAction::make()

@@ -27,8 +27,9 @@ class Berkas extends Model
      * Casting kolom.
      */
     protected $casts = [
-        'keywords'  => 'array',
-        'is_public' => 'boolean', // <-- penting untuk policy & UI
+        'keywords'         => 'array',
+        'is_public'        => 'boolean',
+        'dokumen_versions' => 'array',   // <— penting
     ];
 
     /* ===========================
@@ -58,4 +59,40 @@ class Berkas extends Model
     {
         return $query->where('is_public', true);
     }
+
+    protected static function booted(): void
+    {
+        // Saat dokumen diganti, pindahkan versi lama ke _versions dan catat
+        static::updating(function (self $m) {
+            if ($m->isDirty('dokumen')) {
+                $old = $m->getOriginal('dokumen');
+                $m->appendDokumenVersion($old, auth()->id());
+            }
+        });
+    }
+
+    public function appendDokumenVersion(?string $oldPath, ?int $userId = null): void
+    {
+        if (!$oldPath) return;
+
+        $disk = \Storage::disk('private');
+        if (!$disk->exists($oldPath)) return;
+
+        $newPath = 'berkas/_versions/'.$this->id.'/'.now()->format('Ymd_His').'-'.basename($oldPath);
+        $disk->makeDirectory(dirname($newPath));
+        $disk->move($oldPath, $newPath);
+
+        $versions = $this->dokumen_versions ?? [];
+        $versions[] = [
+            'path'        => $newPath,
+            'filename'    => basename($oldPath),
+            'size'        => $disk->size($newPath),
+            'ext'         => pathinfo($newPath, PATHINFO_EXTENSION),
+            'uploaded_at' => now()->toDateTimeString(), // tak available? pakai now
+            'replaced_at' => now()->toDateTimeString(),
+            'by'          => $userId,
+        ];
+        $this->dokumen_versions = $versions;
+    }
+
 }

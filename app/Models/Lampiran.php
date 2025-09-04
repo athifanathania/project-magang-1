@@ -13,10 +13,6 @@ class Lampiran extends Model
 
     protected $guarded = [];
 
-    // protected $casts = [
-    //     'keywords' => 'array',
-    // ];
-
     public function berkas()
     {
         return $this->belongsTo(\App\Models\Berkas::class);
@@ -76,7 +72,21 @@ class Lampiran extends Model
             // Jika pakai soft deletes, ubah ke ->each->delete()
             $m->children()->get()->each->delete();
         });
+
+        // Saat file lampiran diganti, pindahkan versi lama & catat
+        static::updating(function (self $m) {
+            if ($m->isDirty('file')) {
+                $old = $m->getOriginal('file');
+                $m->appendFileVersion($old, auth()->id());
+            }
+        });
     }
+
+    protected $casts = [
+        'file_versions' => 'array',   // <— penting
+        // 'keywords' => 'array', 
+    ];
+
 
     /** Rekursif: set berkas_id semua turunan = $newId */
     public function updateDescendantsBerkasId($newId): void
@@ -126,4 +136,29 @@ class Lampiran extends Model
             return json_encode($sanitize($arr), JSON_UNESCAPED_UNICODE);
         });
     }
+
+    public function appendFileVersion(?string $oldPath, ?int $userId = null): void
+    {
+        if (!$oldPath) return;
+
+        $disk = \Storage::disk('private');
+        if (!$disk->exists($oldPath)) return;
+
+        $newPath = 'lampiran/_versions/'.$this->id.'/'.now()->format('Ymd_His').'-'.basename($oldPath);
+        $disk->makeDirectory(dirname($newPath));
+        $disk->move($oldPath, $newPath);
+
+        $versions = $this->file_versions ?? [];
+        $versions[] = [
+            'path'        => $newPath,
+            'filename'    => basename($oldPath),
+            'size'        => $disk->size($newPath),
+            'ext'         => pathinfo($newPath, PATHINFO_EXTENSION),
+            'uploaded_at' => now()->toDateTimeString(),
+            'replaced_at' => now()->toDateTimeString(),
+            'by'          => $userId,
+        ];
+        $this->file_versions = $versions;
+    }
+
 }

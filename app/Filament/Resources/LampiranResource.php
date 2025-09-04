@@ -26,10 +26,10 @@ class LampiranResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-m-paper-clip';
 
-    protected static ?string $navigationLabel = 'Lampiran';
+    protected static ?string $navigationLabel = 'Dokumen Pelengkap';
 
     protected static ?string $modelLabel = 'lampiran';
-    protected static ?string $pluralModelLabel = 'Lampiran';
+    protected static ?string $pluralModelLabel = 'Dokumen Pelengkap';
 
     public static function form(Form $form): Form
     {
@@ -120,7 +120,7 @@ class LampiranResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('berkas.nama')
-                    ->label('Berkas')
+                    ->label('Part Name')
                     // sort TANPA join lagi (kita sudah join alias `b` di base query)
                     ->sortable(query: fn (Builder $query, string $direction): Builder =>
                         $query->orderBy('b.nama', $direction)
@@ -135,7 +135,18 @@ class LampiranResource extends Resource
                 Tables\Columns\TextColumn::make('nama')
                     ->label('Lampiran')
                     ->extraCellAttributes(['class' => 'max-w-[60rem] whitespace-normal break-words'])
-                    ->sortable()
+                    ->sortable(query: function (Builder $query, string $direction): Builder {
+                        $table = $query->getModel()->getTable(); // 'lampirans'
+                        return $query
+                            // bersihkan ORDER BY lama, lalu tetap kunci Part Name A–Z
+                            ->reorder('b.nama', 'asc')
+                            // urut angka pertama dalam 'nama' sebagai numerik
+                            ->orderByRaw(
+                                "IFNULL(CAST(REGEXP_SUBSTR({$table}.nama, '[0-9]+') AS UNSIGNED), 999999999) {$direction}"
+                            )
+                            // fallback alfabet jika sama angkanya
+                            ->orderBy("{$table}.nama", $direction);
+                    })
                     ->searchable(
                         query: function (Builder $query, string $search): Builder {
                             $like = "%{$search}%";
@@ -202,6 +213,18 @@ class LampiranResource extends Resource
             ->actions([
                 Tables\Actions\EditAction::make()
                     ->visible(fn()=>auth()->user()->can('lampiran.update')),
+
+                Tables\Actions\Action::make('history')
+                    ->label('Riwayat')
+                    ->icon('heroicon-m-clock')
+                    ->color('gray')
+                    ->modalHeading('Riwayat Lampiran')
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel('Tutup')
+                    ->modalContent(fn (\App\Models\Lampiran $record) =>
+                        view('tables.rows.lampiran-history', ['record' => $record])
+                    ),
+
                 Tables\Actions\Action::make('addChild')
                     ->label('Tambah Sub')
                     ->icon('heroicon-m-plus')
@@ -232,8 +255,9 @@ class LampiranResource extends Resource
             ->with(['berkas','parent'])
             ->leftJoin("{$berk} as b", "{$lamp}.berkas_id", '=', 'b.id')
             ->select("{$lamp}.*")
-            ->orderBy('b.nama', 'asc')          // default: urut dokumen A–Z
-            ->orderBy("{$lamp}.nama", 'asc');   // opsional: lampiran A–Z
+            ->orderBy('b.nama', 'asc')
+            ->orderByRaw("IFNULL(CAST(REGEXP_SUBSTR({$lamp}.nama, '[0-9]+') AS UNSIGNED), 999999999) asc")
+            ->orderBy("{$lamp}.nama", 'asc');
     }
 
     public static function getPages(): array
