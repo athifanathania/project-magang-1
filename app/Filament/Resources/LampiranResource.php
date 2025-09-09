@@ -17,6 +17,11 @@ use Filament\Tables\Columns\TagsColumn;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Filament\Forms\Components\Actions\Action as FormAction;
 use App\Models\Berkas;
+use Filament\Tables\Actions\ViewAction;
+use Filament\Forms\Components\Section;
+use Filament\Forms\Components\View as ViewField;
+use Filament\Tables\Actions\EditAction;
+use Filament\Tables\Actions\DeleteAction;
 
 class LampiranResource extends Resource
 {
@@ -33,6 +38,9 @@ class LampiranResource extends Resource
 
     public static function form(Form $form): Form
     {
+        $readonly = fn (string $context = null) =>
+        ($context === 'view') || request()->boolean('view'); // ← dukung context & ?view=1
+        
         return $form->schema([
             Forms\Components\Select::make('berkas_id')
                 ->label('Dokumen')
@@ -40,11 +48,13 @@ class LampiranResource extends Resource
                 ->searchable()
                 ->preload()
                 ->required()
+                ->disabled($readonly)
                 ->default(request('berkas_id')),
 
             Forms\Components\Select::make('parent_id')
                 ->label('Parent (opsional)')
                 ->reactive()
+                ->disabled($readonly)
                 ->options(function (Get $get, ?\App\Models\Lampiran $record) {
                     $berkasId = $get('berkas_id') ?? request('berkas_id');
                     return \App\Models\Lampiran::query()
@@ -59,11 +69,13 @@ class LampiranResource extends Resource
 
             Forms\Components\TextInput::make('nama')
                 ->required()
+                ->disabled($readonly)
                 ->maxLength(255),
 
             // ===== File Lampiran (PRIVATE) =====
             Forms\Components\FileUpload::make('file')
                 ->disk('private')
+                ->disabled($readonly)
                 ->directory('lampiran')
                 ->preserveFilenames()
                 ->rules(['nullable', 'file'])
@@ -88,6 +100,7 @@ class LampiranResource extends Resource
             Forms\Components\TagsInput::make('keywords')
                 ->label('Kata Kunci')
                 ->placeholder('New tag')
+                ->disabled($readonly)
                 ->afterStateHydrated(function (Forms\Components\TagsInput $component, $state) {
                     $parse = function ($v) {
                         if (blank($v)) return [];
@@ -112,12 +125,24 @@ class LampiranResource extends Resource
                 )
                 ->reorderable()
                 ->separator(','),
+
+                Section::make('Riwayat lampiran')
+                    ->visible(fn (string $context) => $context === 'view')   // <- pakai context, bukan request()
+                    ->schema([
+                        \Filament\Forms\Components\View::make('lampiran_history')
+                            ->view('tables.rows.lampiran-history')
+                            ->columnSpanFull(),
+                    ]),
         ]);
     }
 
     public static function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(function (Builder $query) {
+                $query->leftJoin('berkas as b', 'lampirans.berkas_id', '=', 'b.id')
+                    ->select('lampirans.*');
+            })
             ->columns([
                 Tables\Columns\TextColumn::make('berkas.nama')
                     ->label('Part Name')
@@ -211,19 +236,17 @@ class LampiranResource extends Resource
             ->filters([ //
             ])
             ->actions([
+                ViewAction::make()
+                    ->label('')
+                    ->icon('heroicon-m-eye')
+                    ->tooltip('Lihat')
+                    ->url(fn () => null)                 // <- paksa modal, jangan ke page /view
+                    ->modalHeading('Lihat Lampiran')
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel('Tutup'),
+
                 Tables\Actions\EditAction::make()
                     ->visible(fn()=>auth()->user()->can('lampiran.update')),
-
-                Tables\Actions\Action::make('history')
-                    ->label('Riwayat')
-                    ->icon('heroicon-m-clock')
-                    ->color('gray')
-                    ->modalHeading('Riwayat Lampiran')
-                    ->modalSubmitAction(false)
-                    ->modalCancelActionLabel('Tutup')
-                    ->modalContent(fn (\App\Models\Lampiran $record) =>
-                        view('tables.rows.lampiran-history', ['record' => $record])
-                    ),
 
                 Tables\Actions\Action::make('addChild')
                     ->label('Tambah Sub')
@@ -248,16 +271,8 @@ class LampiranResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $lamp = (new \App\Models\Lampiran)->getTable(); // 'lampirans'
-        $berk = (new \App\Models\Berkas)->getTable();   // 'berkas'
-
-        return parent::getEloquentQuery()
-            ->with(['berkas','parent'])
-            ->leftJoin("{$berk} as b", "{$lamp}.berkas_id", '=', 'b.id')
-            ->select("{$lamp}.*")
-            ->orderBy('b.nama', 'asc')
-            ->orderByRaw("IFNULL(CAST(REGEXP_SUBSTR({$lamp}.nama, '[0-9]+') AS UNSIGNED), 999999999) asc")
-            ->orderBy("{$lamp}.nama", 'asc');
+        // Cukup eager-load relasi. TANPA join/order.
+        return parent::getEloquentQuery()->with(['berkas', 'parent']);
     }
 
     public static function getPages(): array
@@ -266,6 +281,7 @@ class LampiranResource extends Resource
             'index' => Pages\ListLampirans::route('/'),
             'create' => Pages\CreateLampiran::route('/create'),
             'edit' => Pages\EditLampiran::route('/{record}/edit'),
+            'view' => Pages\ViewLampiran::route('/{record}/view'), 
         ];
     }
 
@@ -283,4 +299,5 @@ class LampiranResource extends Resource
     {
         return auth()->user()?->can('lampiran.view') ?? false;
     }
+
 }

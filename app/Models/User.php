@@ -11,44 +11,26 @@ use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
-    use HasRoles; 
+    use HasRoles;
     use HasApiTokens, HasFactory, Notifiable;
+
     protected $guard_name = 'web';
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array<int, string>
-     */
     protected $fillable = [
-        'name',
-        'email',
-        'password',
+        'name','email','password',
+        'department','is_active',  
     ];
 
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var array<int, string>
-     */
-    protected $hidden = [
-        'password',
-        'remember_token',
-    ];
+    protected $hidden = ['password','remember_token'];
 
-    /**
-     * The attributes that should be cast.
-     *
-     * @var array<string, string>
-     */
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
+        'is_active' => 'bool',      
     ];
 
     protected static function booted(): void {
         static::created(function ($user) {
-            // Hindari error kalau role belum ada
             if (\Spatie\Permission\Models\Role::whereName('Viewer')->exists()) {
                 $user->assignRole('Viewer');
             }

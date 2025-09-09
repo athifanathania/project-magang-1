@@ -39,6 +39,8 @@ class Lampiran extends Model
         return $q->whereNull('parent_id');
     }
 
+    protected ?string $oldFilePath = null;
+
     protected static function booted(): void
     {
         // Pastikan anak selalu mewarisi berkas_id parent
@@ -60,25 +62,33 @@ class Lampiran extends Model
             }
         });
 
-        // Jika berkas_id berubah (mis. dipindah cabang), propagasikan ke seluruh keturunan
-        static::saved(function (Lampiran $m) {
-            if ($m->wasChanged('berkas_id')) {
-                $m->updateDescendantsBerkasId($m->berkas_id);
-            }
-        });
-
-        // Hapus subtree jika belum pakai FK cascade di DB
-        static::deleting(function (Lampiran $m) {
-            // Jika pakai soft deletes, ubah ke ->each->delete()
-            $m->children()->get()->each->delete();
-        });
-
-        // Saat file lampiran diganti, pindahkan versi lama & catat
+        // Simpan path lama hanya jika 'file' berubah
         static::updating(function (self $m) {
             if ($m->isDirty('file')) {
-                $old = $m->getOriginal('file');
-                $m->appendFileVersion($old, auth()->id());
+                $m->oldFilePath = $m->getOriginal('file');
             }
+        });
+
+        static::saved(function (self $m) {
+            // stop kalau 'file' tidak berubah
+            if (! $m->wasChanged('file')) {
+                return;
+            }
+
+            $old = $m->oldFilePath;
+            if (! $old) {
+                return;
+            }
+
+            $m->appendFileVersion($old, auth()->id());
+
+            // bersihkan dan simpan riwayat tanpa event
+            $m->oldFilePath = null;
+            $m->saveQuietly();
+        });
+
+        static::deleting(function (Lampiran $m) {
+            $m->children()->get()->each->delete();
         });
     }
 
@@ -144,6 +154,17 @@ class Lampiran extends Model
         $disk = \Storage::disk('private');
         if (!$disk->exists($oldPath)) return;
 
+        // waktu upload awal: dari mtime file lama
+        $uploadedAt = null;
+        try {
+            $ts = $disk->lastModified($oldPath);
+            if (is_numeric($ts)) {
+                $uploadedAt = \Illuminate\Support\Carbon::createFromTimestamp($ts)->toDateTimeString();
+            }
+        } catch (\Throwable $e) {
+            // biarkan null jika gagal
+        }
+
         $newPath = 'lampiran/_versions/'.$this->id.'/'.now()->format('Ymd_His').'-'.basename($oldPath);
         $disk->makeDirectory(dirname($newPath));
         $disk->move($oldPath, $newPath);
@@ -154,11 +175,33 @@ class Lampiran extends Model
             'filename'    => basename($oldPath),
             'size'        => $disk->size($newPath),
             'ext'         => pathinfo($newPath, PATHINFO_EXTENSION),
-            'uploaded_at' => now()->toDateTimeString(),
+            'uploaded_at' => $uploadedAt ?? now()->toDateTimeString(), // fallback now()
             'replaced_at' => now()->toDateTimeString(),
             'by'          => $userId,
         ];
         $this->file_versions = $versions;
     }
+
+    public function deleteVersionAtIndex(int $index): bool
+    {
+        $versions = $this->file_versions ?? [];
+        if (! array_key_exists($index, $versions)) {
+            return false;
+        }
+
+        $disk = \Storage::disk('private');
+
+        $v = $versions[$index];
+        if (!empty($v['path']) && $disk->exists($v['path'])) {
+            $disk->delete($v['path']);
+        }
+
+        array_splice($versions, $index, 1);
+        $this->file_versions = array_values($versions);
+        $this->saveQuietly();
+
+        return true;
+    }
+
 
 }

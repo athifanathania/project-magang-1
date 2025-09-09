@@ -60,17 +60,33 @@ class Berkas extends Model
         return $query->where('is_public', true);
     }
 
+    protected ?string $oldDokumenPath = null;
+
     protected static function booted(): void
     {
-        // Saat dokumen diganti, pindahkan versi lama ke _versions dan catat
         static::updating(function (self $m) {
-            if ($m->isDirty('dokumen')) {
-                $old = $m->getOriginal('dokumen');
-                $m->appendDokumenVersion($old, auth()->id());
+            $m->oldDokumenPath = $m->getOriginal('dokumen');
+        });
+
+        static::saved(function (self $m) {
+            if (! $m->wasChanged('dokumen')) {
+                return;
             }
+
+            $old = $m->oldDokumenPath;
+            if (! $old) {
+                return;
+            }
+
+            $m->appendDokumenVersion($old, auth()->id());
+
+            $m->oldDokumenPath = null;
+
+            $m->saveQuietly();
         });
     }
 
+    
     public function appendDokumenVersion(?string $oldPath, ?int $userId = null): void
     {
         if (!$oldPath) return;

@@ -1,5 +1,11 @@
-@props(['lampiran', 'level' => 0, 'forceShowSub' => false, 'filterTerms' => [], 'filterAll' => false])
-
+@props([
+  'lampiran',
+  'level' => 0,
+  'forceShowSub' => false,
+  'filterTerms' => [],
+  'filterAll' => false,
+  'modalId' => 'view-lampiran-panel',   {{-- default, tapi kita pass dari parent --}}
+])
 
 @php
     use Illuminate\Support\Facades\Storage;
@@ -207,7 +213,7 @@
                     @if ($hasFile)
                         <a href="{{ $openUrl }}" target="_blank" rel="noopener"
                         class="text-sm font-medium hover:underline" style="color:#2563eb"
-                        @click.stop.prevent>
+                        @click.stop>
                         Buka
                         </a>
                     @elseif ($canUpdate)
@@ -224,6 +230,17 @@
                         </button>
                     @endif
                     </div>
+                    <a href="#"
+                        class="text-gray-600 hover:text-gray-900"
+                        title="Lihat"
+                        @click.stop.prevent="
+                            $dispatch('open-modal', { id: '{{ $modalId }}' });
+                            setTimeout(() => {
+                                window.Livewire.dispatch('open-lampiran-view', { id: {{ $lampiran->id }} });
+                            }, 10);
+                        ">
+                        <x-filament::icon icon="heroicon-m-eye" class="w-4 h-4" />
+                    </a>
 
                     @can('update', $lampiran)
                     <a href="{{ $editUrl }}" class="ml-2 text-gray-400 hover:text-blue-600 shrink-0" title="Edit lampiran" @click.stop>

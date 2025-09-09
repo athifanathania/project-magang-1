@@ -41,57 +41,98 @@ class UserResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('name')
-                    ->label('Nama')
-                    ->searchable()
-                    ->sortable(),
+                    ->label('Nama')->searchable()->sortable(),
 
-                Tables\Columns\TextColumn::make('email')
-                    ->searchable(),
+                Tables\Columns\TextColumn::make('email')->searchable(),
 
-                Tables\Columns\TagsColumn::make('roles.name')
-                    ->label('Roles'),
+                Tables\Columns\TextColumn::make('department')
+                    ->label('Departemen')
+                    ->sortable()
+                    ->toggleable(), // bisa disembunyikan dari header
+
+                Tables\Columns\BadgeColumn::make('is_active')
+                    ->label('Status')
+                    ->formatStateUsing(fn ($state) => $state ? 'Active' : 'Non-Active')
+                    ->colors([
+                        'success' => fn ($state) => $state === true,
+                        'danger'  => fn ($state) => $state === false,
+                    ])
+                    ->icon(fn ($state) => $state ? 'heroicon-m-check-circle' : 'heroicon-m-x-circle'),
+
+                Tables\Columns\TagsColumn::make('roles.name')->label('Roles'),
+            ])
+            ->filters([
+                // Filter status
+                Tables\Filters\TernaryFilter::make('is_active')
+                    ->label('Hanya Active?')
+                    ->boolean(),
+
+                // Filter departemen (ambil nilai unik dari DB)
+                Tables\Filters\SelectFilter::make('department')
+                    ->label('Departemen')
+                    ->options(fn () => \App\Models\User::query()
+                        ->whereNotNull('department')
+                        ->distinct()
+                        ->orderBy('department')
+                        ->pluck('department','department')
+                        ->all()),
             ])
             ->actions([
                 Tables\Actions\EditAction::make()
                     ->visible(fn () => auth()->check() && auth()->user()->hasRole('Admin')),
+
+                // Quick toggle Active/Non-Active untuk Admin
+                Tables\Actions\Action::make('toggleActive')
+                    ->label(fn (User $record) => $record->is_active ? 'Non-Active' : 'Set Active')
+                    ->requiresConfirmation()
+                    ->visible(fn () => auth()->check() && auth()->user()->hasRole('Admin'))
+                    ->action(function (User $record) {
+                        $record->update(['is_active' => !$record->is_active]);
+                    })
+                    ->color(fn (User $u) => $u->is_active ? 'danger' : 'success')
+                    ->icon(fn (User $u) => $u->is_active ? 'heroicon-m-pause-circle' : 'heroicon-m-play-circle'),
+
                 Tables\Actions\DeleteAction::make()
                     ->visible(fn () => auth()->check() && auth()->user()->hasRole('Admin')),
             ])
-            ->bulkActions([]); // tidak ada bulk action untuk aman
+            ->bulkActions([]); // tetap kosong untuk aman
     }
 
     public static function form(Form $form): Form
     {
         return $form->schema([
             Forms\Components\TextInput::make('name')
-                ->label('Nama')
-                ->required()
-                ->maxLength(255),
+                ->label('Nama')->required()->maxLength(255),
 
             Forms\Components\TextInput::make('email')
-                ->email()
-                ->required()
-                ->maxLength(255)
-                ->unique(ignoreRecord: true),
+                ->email()->required()->maxLength(255)->unique(ignoreRecord: true),
+
+            Forms\Components\TextInput::make('department')
+                ->label('Departemen')
+                ->maxLength(100)
+                ->datalist(['QC', 'PPC', 'Audit Internal', 'HRD', 'Purchasing', 'Marketing'])
+                ->placeholder('Mis. QC, PPC, Audit Internal, HRD'),
+
+            Forms\Components\Toggle::make('is_active')
+                ->label('User Active')
+                ->default(true)
+                ->inline(false)
+                ->visible(fn () => auth()->check() && auth()->user()->hasRole('Admin')),
 
             Forms\Components\TextInput::make('password')
                 ->label('Password (kosongkan jika tidak ganti)')
-                ->password()
-                ->revealable()
+                ->password()->revealable()
                 ->dehydrateStateUsing(fn ($state) => filled($state) ? Hash::make($state) : null)
                 ->dehydrated(fn ($state) => filled($state))
                 ->required(fn (string $context) => $context === 'create'),
 
-            // Hanya Admin yang bisa atur role
             Forms\Components\Select::make('roles')
-                ->label('Role')
-                ->relationship('roles', 'name')
-                ->multiple()
-                ->preload()
-                ->searchable()
+                ->label('Role')->relationship('roles','name')
+                ->multiple()->preload()->searchable()
                 ->visible(fn () => auth()->check() && auth()->user()->hasRole('Admin')),
         ]);
     }
+
 
     public static function getPages(): array
     {

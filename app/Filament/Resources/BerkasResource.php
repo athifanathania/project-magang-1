@@ -59,7 +59,7 @@ class BerkasResource extends Resource
                 TextInput::make('customer_name')
                     ->label('Customer Name')
                     ->placeholder('mis. Suzuki')
-                    ->datalist(['Suzuki', 'Yamaha', 'FCC Indonesia', 'Astemo', 'IMC']) 
+                    ->datalist(['Suzuki', 'Yamaha', 'FCC Indonesia', 'Astemo', 'IMC Tekno Id    ']) 
                     ->maxLength(100)
                     ->required(),
 
@@ -133,13 +133,22 @@ class BerkasResource extends Resource
                                 shouldOpenInNewTab: true
                             )
                             ->visible(fn ($record) => filled($record?->dokumen))
-                    ),
+                    )
+                    ->deleteUploadedFileUsing(fn () => null),
 
                 // =========================
                 // Lampiran (disarankan kelola via tabel/aksi)
                 // =========================
                 \Filament\Forms\Components\Section::make('Lampiran')
                     ->description('Kelola lampiran melalui tombol "Lampiran" / "Kelola Lampiran" di tabel.'),
+                Section::make('Riwayat dokumen')
+                    ->visible(fn (string $context) => $context === 'view') // hanya muncul di modal View
+                    ->schema([
+                        ViewField::make('dokumen_history')
+                            ->view('tables.rows.berkas-history') // blade di langkah 3
+                            ->columnSpanFull(),
+                    ]),
+
             ]);
     }
 
@@ -150,7 +159,6 @@ class BerkasResource extends Resource
                 TextColumn::make('customer_name')
                     ->label('Cust Name')
                     ->sortable()
-                    ->searchable()
                     ->limit(16)
                     ->tooltip(fn (?string $state) => $state)
                     ->grow(false)                                   // << kunci agar tidak melebar
@@ -163,8 +171,7 @@ class BerkasResource extends Resource
                 TextColumn::make('model')
                     ->label('Model')
                     ->sortable()
-                    ->extraCellAttributes(['class' => 'max-w-[7rem] whitespace-normal break-words'])
-                    ->searchable(),
+                    ->extraCellAttributes(['class' => 'max-w-[7rem] whitespace-normal break-words']),
 
                 TextColumn::make('kode_berkas')
                     ->label('Part No')
@@ -309,11 +316,7 @@ class BerkasResource extends Resource
                     ViewAction::make()
                         ->label('')
                         ->icon('heroicon-m-eye')
-                        ->tooltip('Lihat')
-                        ->modalContent(function (\App\Models\Berkas $record) {
-                            return view('tables.rows.berkas-view', ['record' => $record]);
-                        // berkas-view.blade.php berisi form readonly + include('tables.rows.berkas-history')
-                        }),
+                        ->tooltip('Lihat'),
 
                     // Edit/Delete: hanya Admin/Editor – gunakan nullsafe (?? false)
                     EditAction::make()

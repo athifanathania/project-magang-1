@@ -44,30 +44,48 @@ class ListBerkas extends ListRecords
         $this->openLampiranForId = null; // sekali pakai
     }
 
-    /** Dipanggil oleh tombol 🗑️ di panel/modal (event dari Blade: $dispatch('delete-lampiran', …)) */
-    #[On('delete-lampiran')]
-    public function handleDeleteLampiran(int $id, int $berkasId, string $source = 'panel'): void
+    /** Dipanggil dari blade via $wire.handleDeleteLampiran(...) */
+    public function handleDeleteLampiran(int $lampiranId, int $berkasId, string $source = 'panel'): void
     {
-        if ($m = Lampiran::find($id)) {
-            $m->delete();
+        // (opsional) otorisasi: pastikan user boleh hapus
+        // $this->authorize('lampiran.delete');
+
+        $lampiran = Lampiran::query()
+            ->whereKey($lampiranId)
+            ->where('berkas_id', $berkasId)
+            ->first();
+
+        if (! $lampiran) {
+            Notification::make()->title('Lampiran tidak ditemukan')->danger()->send();
+            return;
         }
 
-        Notification::make()->title('Lampiran dihapus')->success()->send();
+        // Model Lampiran kamu sudah punya hook deleting() yang menghapus anak-anak.
+        $lampiran->delete();
 
-        if ($source === 'modal') {
-            if ($record = Berkas::find($berkasId)) {
-                $this->mountTableAction('lampiran', $record);
+        // refresh UI panel/tabel
+        $this->dispatch('$refresh');
+
+        Notification::make()
+            ->title('Lampiran terhapus')
+            ->body('Lampiran beserta semua subnya telah dihapus.')
+            ->success()
+            ->send();
+    }
+    
+    /** Hapus satu versi file riwayat (dipanggil dari blade history via $wire.handleDeleteLampiranVersion) */
+    #[On('delete-lampiran-version')]
+    public function handleDeleteLampiranVersion(int $lampiranId, int $index): void
+    {
+        if ($m = Lampiran::find($lampiranId)) {
+            if ($m->deleteVersionAtIndex($index)) {
+                Notification::make()->title('Versi lampiran dihapus')->success()->send();
+            } else {
+                Notification::make()->title('Versi tidak ditemukan')->danger()->send();
             }
         } else {
-            $this->dispatch('$refresh'); // v3 (v2: $this->emitSelf('$refresh'))
+            Notification::make()->title('Lampiran tidak ditemukan')->danger()->send();
         }
-
-        $this->js(<<<'JS'
-            document.documentElement.classList.remove('overflow-y-hidden','fi-modal-open');
-            document.body.classList.remove('overflow-y-hidden');
-            document.documentElement.style.removeProperty('overflow');
-            document.body.style.removeProperty('overflow');
-        JS);
 
         $this->dispatch('$refresh');
     }
@@ -76,7 +94,4 @@ class ListBerkas extends ListRecords
     {
         return [ Actions\CreateAction::make() ];
     }
-
-    
-
 }
