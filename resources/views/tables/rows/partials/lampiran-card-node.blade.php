@@ -27,8 +27,23 @@
 
     $editUrl  = \App\Filament\Resources\LampiranResource::getUrl('edit', ['record' => $lampiran]);
 
-    // === Aturan warna: MERAH hanya bila LEAF & TIDAK punya file ===
-    $isCompletelyMissing = (!$hasChildren) && (!$hasFile);
+    // Cek: apakah DI CABANG INI (node + semua keturunan) ADA file?
+    $branchHasFileFn = function (\App\Models\Lampiran $n) use (&$branchHasFileFn) {
+        $path = trim((string) ($n->file ?? ''));
+        if ($path !== '') return true;
+
+        $kids = $n->relationLoaded('childrenRecursive')
+            ? $n->childrenRecursive
+            : $n->children()->with('childrenRecursive')->get();
+
+        return $kids->some(fn ($c) => $branchHasFileFn($c));
+    };
+
+    $branchHasFile = $branchHasFileFn($lampiran);
+
+    // → Merah hanya jika di cabang ini SAMA SEKALI tidak ada file
+    $isCompletelyMissing = ! $branchHasFile;
+
 
     // URL untuk buka file jika node ini punya file sendiri
     $openUrl = $hasFile
@@ -292,7 +307,8 @@
                                 'level'         => $level + 1,
                                 'filterTerms'   => $terms->all() ?? $filterTerms,
                                 'filterAll'     => $modeAll ?? $filterAll,
-                                'forceShowSub'  => $forceShowSub,   // penting
+                                'forceShowSub'  => $forceShowSub,   
+                                'modalId'       => $modalId,
                             ])
                         @endforeach
                     </div>
@@ -305,7 +321,8 @@
     @foreach ($children as $child)
         @include('tables.rows.partials.lampiran-card-node', [
             'lampiran' => $child,
-            'level'    => $level,   // bukan $level + 1, karena parent disembunyikan
+            'level'    => $level,  
+            'modalId'  => $modalId, 
         ])
     @endforeach
 @endif
