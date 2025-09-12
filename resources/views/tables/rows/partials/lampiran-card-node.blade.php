@@ -4,17 +4,36 @@
   'forceShowSub' => false,
   'filterTerms' => [],
   'filterAll' => false,
-  'modalId' => 'view-lampiran-panel',   {{-- default, tapi kita pass dari parent --}}
+  // default id modal; parent bisa override
+  'modalId' => 'view-lampiran-panel',
 ])
 
 @php
     use Illuminate\Support\Facades\Storage;
-    // Ambil children (fallback ke query jika belum eager-loaded)
-    $children = $lampiran->relationLoaded('childrenRecursive')
+
+    // === Ambil SEMUA children (pakai eager kalau sudah dimuat) ===
+    $childrenAll = $lampiran->relationLoaded('childrenRecursive')
         ? $lampiran->childrenRecursive
         : $lampiran->children()->with('childrenRecursive')->get();
 
-    $hasChildren = $children->isNotEmpty();
+    // dipakai untuk render (nanti bisa terfilter oleh pencarian)
+    $children    = $childrenAll;
+    $hasChildren = $childrenAll->isNotEmpty();
+
+    // === Status file node ini ===
+    $filePath = trim((string) ($lampiran->file ?? ''));
+    $hasFile  = ($filePath !== '');
+    $noFile   = ! $hasFile;
+
+    $editUrl  = \App\Filament\Resources\LampiranResource::getUrl('edit', ['record' => $lampiran]);
+
+    // === Aturan warna: MERAH hanya bila LEAF & TIDAK punya file ===
+    $isCompletelyMissing = (!$hasChildren) && (!$hasFile);
+
+    // URL untuk buka file jika node ini punya file sendiri
+    $openUrl = $hasFile
+        ? route('media.berkas.lampiran', ['berkas' => $lampiran->berkas_id, 'lampiran' => $lampiran->id])
+        : null;
 
     // ── PARSE KEYWORDS (robust: pecah CSV di semua level)
     $rawKw = $lampiran->keywords ?? null;
@@ -49,16 +68,6 @@
         'parent_id' => $lampiran->id,
         'berkas_id' => $lampiran->berkas_id,
     ]);
-
-    $filePath = trim((string) ($lampiran->file ?? ''));
-    $noFile   = ($filePath === '');
-
-    $editUrl  = \App\Filament\Resources\LampiranResource::getUrl('edit', ['record' => $lampiran]);
-
-    $hasFile  = ! $noFile;
-    $openUrl  = $hasFile
-        ? route('media.berkas.lampiran', ['berkas' => $lampiran->berkas_id, 'lampiran' => $lampiran->id])
-        : null;
 
     $canUpdate = auth()->user()?->can('update', $lampiran) ?? false;
 
@@ -152,6 +161,7 @@
 
 @if ($shouldRender)
     <div
+    wire:key="lampiran-card-{{ $lampiran->id }}"
     class="rounded-lg border p-3 mb-2 w-full max-w-full overflow-hidden {{ $indent }} {{ $hasFile ? 'cursor-pointer hover:bg-blue-50/50' : '' }}"
     x-data="{ open: false }"
     data-file-url="{{ $hasFile ? $openUrl : '' }}"
@@ -193,10 +203,10 @@
                         @class([
                             'font-semibold',
                             'break-words',
-                            'text-red-600' => $noFile,
-                            'text-gray-900' => ! $noFile,
+                            'text-red-600' => $isCompletelyMissing,   // merah hanya jika cabang benar2 kosong
+                            'text-gray-900' => ! $isCompletelyMissing,
                         ])
-                        style="{{ $noFile ? 'color:#dc2626' : '' }}"
+                        style="{{ $isCompletelyMissing ? 'color:#dc2626' : '' }}"
                     >
                         {{ $lampiran->nama ?? 'Tanpa judul' }}
                     </span>
@@ -234,10 +244,10 @@
                         class="text-gray-600 hover:text-gray-900"
                         title="Lihat"
                         @click.stop.prevent="
-                            $dispatch('open-modal', { id: '{{ $modalId }}' });
-                            setTimeout(() => {
-                                window.Livewire.dispatch('open-lampiran-view', { id: {{ $lampiran->id }} });
-                            }, 10);
+                            // 1) suruh viewer memuat id ini (tanpa re-render induk)
+                            $wire.dispatch('open-lampiran-view', { id: {{ $lampiran->id }} })
+                            // 2) buka modalnya
+                            $dispatch('open-modal', { id: '{{ $modalId }}' })
                         ">
                         <x-filament::icon icon="heroicon-m-eye" class="w-4 h-4" />
                     </a>
@@ -299,4 +309,3 @@
         ])
     @endforeach
 @endif
-

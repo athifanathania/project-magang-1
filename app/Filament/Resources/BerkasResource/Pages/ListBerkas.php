@@ -77,14 +77,17 @@ class ListBerkas extends ListRecords
     #[On('delete-lampiran-version')]
     public function handleDeleteLampiranVersion(int $lampiranId, int $index): void
     {
-        if ($m = Lampiran::find($lampiranId)) {
+        if ($m = \App\Models\Lampiran::find($lampiranId)) {
             if ($m->deleteVersionAtIndex($index)) {
-                Notification::make()->title('Versi lampiran dihapus')->success()->send();
+                \Filament\Notifications\Notification::make()
+                    ->title('Versi lampiran dihapus')->success()->send();
             } else {
-                Notification::make()->title('Versi tidak ditemukan')->danger()->send();
+                \Filament\Notifications\Notification::make()
+                    ->title('Versi tidak ditemukan')->danger()->send();
             }
         } else {
-            Notification::make()->title('Lampiran tidak ditemukan')->danger()->send();
+            \Filament\Notifications\Notification::make()
+                ->title('Lampiran tidak ditemukan')->danger()->send();
         }
 
         $this->dispatch('$refresh');

@@ -165,11 +165,6 @@ $canCreateLampiran = $user?->can('lampiran.create') ?? false;
         $dispatch('open-modal', { id: 'confirm-delete-lampiran-panel' });
     "
 
-    {{-- buka modal viewer setelah Livewire set current id (dipakai tombol 👁️) --}}
-    x-on:open-lampiran-modal.window="
-        $dispatch('open-modal', { id: 'view-lampiran-panel-{{ $record->id }}' })
-    "
-
     {{-- buka modal konfirmasi hapus VERSI (dipanggil dari lampiran-history.blade) --}}
     x-on:ask-delete-version.window="
         toDeleteVersion = $event.detail;
@@ -231,25 +226,29 @@ $canCreateLampiran = $user?->can('lampiran.create') ?? false;
         </x-slot>
 
         <x-slot name="footer">
+            {{-- ✅ Tutup modal yang benar --}}
             <x-filament::button
                 type="button"
                 color="gray"
                 x-on:click="$dispatch('close-modal', { id: 'confirm-delete-lampiran-panel' })"
             >Batal</x-filament::button>
 
+            {{-- ✅ Panggil handler yang benar + pakai state `toDelete` --}}
             <x-filament::button
                 type="button"
                 color="danger"
                 x-on:click.stop.prevent="
-                    const y = window.scrollY; // simpan posisi scroll
+                    const y = window.scrollY;
                     $dispatch('close-modal', { id: 'confirm-delete-lampiran-panel' });
 
-                    // panggil Livewire setelah transisi modal selesai
                     setTimeout(() => {
                         window.Livewire.find(pageId)
                             .call('handleDeleteLampiran', toDelete.id, toDelete.berkasId, 'panel')
+                            .then(() => {
+                                // opsional: reload supaya state bersih & tidak auto-buka modal
+                                window.location.replace(window.location.pathname + window.location.search);
+                            })
                             .finally(() => {
-                                // pulihkan kelas & scroll
                                 document.body.classList.remove('fi-modal-open','overflow-hidden');
                                 document.documentElement.classList.remove('overflow-hidden');
                                 document.body.style.overflow='';
@@ -261,15 +260,16 @@ $canCreateLampiran = $user?->can('lampiran.create') ?? false;
             >Hapus</x-filament::button>
         </x-slot>
     </x-filament::modal>
+
     {{-- ===================================== --}}
     {{-- Modal: Hapus VERSI file (riwayat)     --}}
     {{-- ===================================== --}}
-    <x-filament::modal id="confirm-delete-version" width="md" wire:ignore.self>
+    <x-filament::modal id="confirm-delete-version" width="xl" wire:ignore.self>
         <x-slot name="heading">Hapus versi lampiran?</x-slot>
 
         <x-slot name="description">
-            <p class="text-sm leading-6 text-gray-600">
-                Versi <b x-text="toDeleteVersion.name"></b> akan dihapus. <br>
+            <p class="text-sm leading-6 text-gray-600 break-words" style="overflow-wrap:anywhere;">
+               Versi <b class="font-semibold text-gray-900 break-all" x-text="toDeleteVersion.name"></b> akan dihapus. <br>
                 Tindakan tidak dapat dibatalkan.
             </p>
         </x-slot>
@@ -304,7 +304,7 @@ $canCreateLampiran = $user?->can('lampiran.create') ?? false;
         </x-slot>
     </x-filament::modal>
     <!-- 🔹 Modal VIEW lampiran -->
-    <x-filament::modal id="view-lampiran-panel-{{ $record->id }}" width="7xl" wire:ignore.self>
+    <x-filament::modal id="view-lampiran-panel-{{ $record->id }}" width="5xl" wire:ignore.self>
         <x-slot name="heading">Lihat Lampiran</x-slot>
 
         {{-- viewer selalu ada; dia akan memuat data saat terima event --}}
