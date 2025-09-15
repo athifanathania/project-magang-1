@@ -1,0 +1,32 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration {
+    public function up(): void
+    {
+        Schema::create('imm_instruksi_standar', function (Blueprint $table) {
+            $table->id();
+
+            $table->string('no', 100)->index();
+            $table->string('nama_dokumen', 255)->index();
+            $table->json('keywords')->nullable();
+            $table->string('file', 512)->nullable();
+
+            $table->json('versions')->nullable();
+
+            $table->string('current_revision', 20)->nullable();
+            $table->date('effective_at')->nullable();
+            $table->date('expires_at')->nullable();
+
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('imm_instruksi_standar');
+    }
+};
