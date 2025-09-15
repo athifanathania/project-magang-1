@@ -19,46 +19,51 @@ use Filament\Tables\Actions\ViewAction;
 use Filament\Tables\Actions\EditAction;
 use Filament\Tables\Actions\DeleteAction;
 use Filament\Tables\Filters\Filter;
+use Filament\Tables\Enums\ActionsPosition;
+use Filament\Tables\Enums\RecordCheckboxPosition;
+use Filament\Tables\Columns\Layout\Panel;
+use Filament\Tables\Columns\Layout\View as ViewLayout;
+
 
 class ImmManualMutuResource extends Resource
 {
     protected static ?string $model = ImmManualMutu::class;
 
     protected static ?string $navigationGroup = 'Dokumen IMM';
-    protected static ?string $navigationLabel = 'Manual Mutu';
+    protected static ?string $navigationLabel = '1. Manual Mutu';
     protected static ?string $modelLabel      = 'Manual Mutu';
-    protected static ?string $pluralModelLabel= 'Manual Mutu';
+    protected static ?string $pluralModelLabel= '1. Manual Mutu';
+    protected static ?int    $navigationSort  = 1; 
     protected static ?string $navigationIcon  = 'heroicon-o-document-text';
 
     public static function form(Form $form): Form
     {
-        $readonly = fn (string $ctx = null) => $ctx === 'view';
-
         return $form->schema([
-            Section::make()->schema([
-                TextInput::make('no')->label('No')->required()->disabled($readonly),
-                TextInput::make('nama_dokumen')->label('Nama Dokumen')->required()->disabled($readonly),
+            Forms\Components\Section::make()->schema([
+                Forms\Components\TextInput::make('nama_dokumen')
+                    ->label('Nama Dokumen')->required()->disabledOn('view'),
 
-                // file aktif; upload file BARU = otomatis versi baru (logika di trait)
-                FileUpload::make('file')
-                    ->label('File')
-                    ->disk('private')
-                    ->directory('imm/manual_mutu')
-                    ->preserveFilenames()
-                    ->rules(['nullable','file'])
-                    ->downloadable(false)
-                    ->openable(false)
-                    ->disabled($readonly),
+                Forms\Components\FileUpload::make('file')
+                    ->label('File')->disk('private')->directory('imm/manual_mutu')
+                    ->preserveFilenames()->rules(['nullable','file'])
+                    ->downloadable(false)->openable(false)->disabledOn('view')
+                    ->saveUploadedFileUsing(function ($file, $record) {
+                        if ($record) {
+                            $ver = $record->addVersionFromUpload($file);
+                            return $ver['file_path'] ?? $record->file;
+                        }
+                        return $file->store('imm/tmp', 'private');
+                    }),
 
-                // tidak ditampilkan di tabel list, tapi berguna untuk filter
-                TagsInput::make('keywords')->label('Kata Kunci')->separator(',')->reorderable()->disabled($readonly),
+                Forms\Components\TagsInput::make('keywords')
+                    ->label('Kata Kunci')->separator(',')->reorderable()->disabledOn('view'),
             ])->columns(2),
 
-            // Khusus modal view: tampilkan riwayat
-            Section::make('Riwayat Dokumen')
-                ->visible(fn (string $ctx) => $ctx === 'view')
+            Forms\Components\Section::make('Riwayat Dokumen')
+                ->visibleOn('view')
                 ->schema([
-                    ViewField::make('imm_history')->view('tables.rows.imm-history')->columnSpanFull(),
+                    Forms\Components\View::make('imm_history')
+                        ->view('tables.rows.imm-history')->columnSpanFull(),
                 ]),
         ]);
     }
@@ -69,85 +74,102 @@ class ImmManualMutuResource extends Resource
 
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('no')->label('No')->sortable()->searchable(),
                 Tables\Columns\TextColumn::make('nama_dokumen')
-                    ->label('Nama Dokumen')
-                    ->wrap()
+                    ->label('Nama Dokumen')->wrap()
                     ->extraCellAttributes(['class'=>'max-w-[28rem] whitespace-normal break-words'])
-                    ->sortable()
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('file')
-                    ->label('File')
-                    ->state(fn ($r) => $r->file ? '📂' : '—')
-                    ->url(fn ($r) => $r->file ? route('media.imm', ['group'=>'manual-mutu','id'=>$r->getKey()]) : null, shouldOpenInNewTab: true)
-                    ->color(fn ($r) => $r->file ? 'primary' : null)
-                    ->extraAttributes(['class'=>'text-blue-600 hover:underline']),
-            ])
+                    ->sortable()->searchable(),
 
-            // === FILTER mirip Berkas (keyword chips, mode ANY/ALL) ===
-            ->filters([
-                Filter::make('q')
-                    ->label('Cari')
-                    ->form([
-                        \Filament\Forms\Components\TagsInput::make('terms')
-                            ->label('Kata kunci')
-                            ->placeholder('Ketik lalu Enter')
-                            ->separator(',')
-                            ->reorderable(),
-                        \Filament\Forms\Components\Toggle::make('all')
-                            ->label('Cocokkan semua keyword (mode ALL)')
-                            ->inline(false),
-                    ])
-                    ->query(function (Builder $query, array $data) use ($tbl) {
-                        $terms = collect($data['terms'] ?? [])
-                            ->filter(fn ($t) => is_string($t) && trim($t) !== '')
-                            ->map(fn ($t) => trim($t))
+                // ⬇️ Tambahan kolom KATA KUNCI
+                Tables\Columns\ViewColumn::make('keywords_view')
+                    ->label('Kata Kunci')
+                    ->state(function (ImmManualMutu $record) {
+                        // Ambil nilai mentah dari DB (bisa json string / array / csv)
+                        $raw = $record->getRawOriginal('keywords');
+
+                        $toArray = function ($v) {
+                            if (blank($v)) return [];
+                            if (is_string($v)) {
+                                $j = json_decode($v, true);
+                                if (json_last_error() === JSON_ERROR_NONE && is_array($j)) return $j;
+                                return preg_split('/\s*,\s*/u', $v, -1, PREG_SPLIT_NO_EMPTY); // CSV
+                            }
+                            if (is_array($v)) return $v;
+                            return (array) $v;
+                        };
+
+                        $arr = $toArray($raw);
+
+                        // Pecah juga item berbentuk CSV di dalam array
+                        return collect($arr)
+                            ->flatMap(fn($item) =>
+                                is_array($item)
+                                    ? $item
+                                    : preg_split('/\s*,\s*/u', trim((string)$item), -1, PREG_SPLIT_NO_EMPTY)
+                            )
+                            ->map(fn($s) => trim((string)$s, " \t\n\r\0\x0B\"'"))
+                            ->filter()
                             ->unique()
                             ->values()
                             ->all();
+                    })
+                    ->view('tables.columns.keywords-grid') // ⬅️ chip view yang sama dengan halaman Berkas
+                    ->extraCellAttributes(['class' => 'max-w-[24rem] whitespace-normal break-words'])
+                    ->toggleable(),
 
+                Tables\Columns\TextColumn::make('file')
+                    ->label('File')
+                    ->formatStateUsing(fn ($state) => $state ? '📂' : '—')
+                    ->url(fn ($record) =>
+                        ($record->file && (auth()->user()?->hasAnyRole(['Admin','Editor','Staff']) ?? false))
+                            ? route('media.imm.file', ['type' => 'manual-mutu', 'id' => $record->getKey()])
+                            : null,
+                        shouldOpenInNewTab: true
+                    )
+                    ->color(fn ($record) => $record->file ? 'primary' : null)
+                    ->extraAttributes(['class'=>'text-blue-600 hover:underline']),
+            ])
+            ->filters([
+                Tables\Filters\Filter::make('q')
+                    ->label('Cari')
+                    ->form([
+                        Forms\Components\TagsInput::make('terms')->label('Kata kunci')->separator(',')->reorderable(),
+                        Forms\Components\Toggle::make('all')->label('Cocokkan semua keyword (mode ALL)')->inline(false),
+                    ])
+                    ->query(function (Builder $query, array $data) use ($tbl) {
+                        $terms = collect($data['terms'] ?? [])
+                            ->filter(fn($t)=>is_string($t)&&trim($t)!=='')
+                            ->map(fn($t)=>trim($t))->unique()->values()->all();
                         if (empty($terms)) return;
 
                         $modeAll = (bool) ($data['all'] ?? false);
-
                         $one = function (Builder $q, string $term) use ($tbl) {
-                            $likeLower = '%' . mb_strtolower($term) . '%';
-                            $q->whereRaw("LOWER({$tbl}.no) LIKE ?", [$likeLower])
-                              ->orWhereRaw("LOWER({$tbl}.nama_dokumen) LIKE ?", [$likeLower])
-                              ->orWhereRaw("LOWER({$tbl}.file) LIKE ?", [$likeLower])
-                              ->orWhereRaw("LOWER(CAST({$tbl}.keywords AS CHAR)) LIKE ?", [$likeLower]);
+                            $like = '%' . mb_strtolower($term) . '%';
+                            $q->whereRaw("LOWER({$tbl}.nama_dokumen) LIKE ?", [$like])
+                            ->orWhereRaw("LOWER({$tbl}.file) LIKE ?", [$like])
+                            ->orWhereRaw("LOWER(CAST({$tbl}.keywords AS CHAR)) LIKE ?", [$like]);
                         };
 
                         $query->where(function (Builder $outer) use ($terms, $modeAll, $one) {
-                            if ($modeAll) {
-                                foreach ($terms as $t) $outer->where(fn ($qq) => $one($qq, $t));
-                            } else {
-                                $outer->where(fn ($qq) => collect($terms)->each(fn ($t) => $qq->orWhere(fn ($q) => $one($q,$t))));
-                            }
+                            if ($modeAll) foreach ($terms as $t) $outer->where(fn($qq)=>$one($qq,$t));
+                            else $outer->where(fn($qq)=>collect($terms)->each(fn($t)=>$qq->orWhere(fn($q)=>$one($q,$t))));
                         });
                     })
                     ->indicateUsing(fn (array $data) =>
                         ($tags = collect($data['terms'] ?? [])->filter()->implode(', ')) ? "Cari: $tags" : null
                     ),
             ])
-
             ->actions([
-                ViewAction::make()
-                    ->label('')
-                    ->icon('heroicon-m-eye')
-                    ->tooltip('Lihat (riwayat)'),
-
-                EditAction::make()
-                    ->label('')
-                    ->icon('heroicon-m-pencil')
-                    ->tooltip('Edit')
-                    ->visible(fn () => auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false),
-
-                DeleteAction::make()
-                    ->label('')
-                    ->icon('heroicon-m-trash')
-                    ->tooltip('Hapus')
-                    ->visible(fn () => auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false),
+                Tables\Actions\ViewAction::make()->label('')->icon('heroicon-m-eye')->tooltip('Lihat (riwayat)'),
+                Tables\Actions\EditAction::make()->label('')->icon('heroicon-m-pencil')->tooltip('Edit')
+                    ->visible(fn()=>auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false),
+                Tables\Actions\DeleteAction::make()->label('')->icon('heroicon-m-trash')->tooltip('Hapus')
+                    ->visible(fn()=>auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false),
+            ])
+            ->bulkActions([
+                Tables\Actions\BulkActionGroup::make([
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->visible(fn () => auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false),
+                ]),
             ]);
     }
 
@@ -159,4 +181,10 @@ class ImmManualMutuResource extends Resource
             'edit'   => Pages\EditImmManualMutu::route('/{record}/edit'),
         ];
     }
+
+    public static function canCreate(): bool
+    {
+        return auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false;
+    }
+
 }

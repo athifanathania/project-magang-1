@@ -25,12 +25,11 @@ class MediaImmController extends Controller
         $modelClass = $this->mapTypeToModel($type);
         abort_unless($modelClass, 404);
 
-        /** @var \Illuminate\Database\Eloquent\Model $m */
+        $user = $req->user();
+        // hanya Admin/Editor/Staff yang boleh membuka file aktif
+        abort_unless($user && $user->hasAnyRole(['Admin','Editor','Staff']), 403);
+
         $m = $modelClass::findOrFail($id);
-
-        // TODO: kalau mau, pakai Gate/Policy di sini
-        // Gate::authorize('view', $m);
-
         $path = (string) $m->file;
         abort_if(blank($path), 404, 'File belum tersedia.');
 

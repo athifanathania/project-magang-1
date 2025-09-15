@@ -3,6 +3,8 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\MediaController;
 use App\Http\Controllers\MediaImmController;
+use App\Models\ImmLampiran;
+use Illuminate\Support\Facades\Storage;
 
 
 // JANGAN redirect / ke /berkas supaya panel publik Filament bisa jalan
@@ -32,16 +34,27 @@ Route::middleware('auth')->group(function () {
         ->name('media.lampiran.version');
 });
 
-// ==== IMM: stream file AKTIF (boleh publik, atur policy kalau perlu) ====
 Route::get('/media/imm/{type}/{id}', [MediaImmController::class, 'file'])
     ->whereIn('type', ['manual-mutu','prosedur','instruksi-standar','formulir'])
     ->whereNumber('id')
     ->name('media.imm.file');
 
-// ==== IMM: download VERSI (butuh login; role cek di controller) =====
 Route::middleware('auth')->group(function () {
     Route::get('/media/imm/{type}/{id}/version/{index}', [MediaImmController::class, 'version'])
         ->whereIn('type', ['manual-mutu','prosedur','instruksi-standar','formulir'])
         ->whereNumber(['id','index'])
         ->name('media.imm.version');
 });
+
+Route::get('/media/imm/lampiran/{lampiran}', function (ImmLampiran $lampiran) {
+    abort_if(blank($lampiran->file), 404);
+    $disk = config('filesystems.default'); // sesuaikan
+    abort_unless(Storage::disk($disk)->exists($lampiran->file), 404);
+
+    return Storage::disk($disk)->download(
+        $lampiran->file,
+        basename($lampiran->file)
+    );
+})->name('media.imm.lampiran');
+
+

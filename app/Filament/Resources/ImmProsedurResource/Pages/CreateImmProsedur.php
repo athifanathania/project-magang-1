@@ -7,4 +7,9 @@ use Filament\Resources\Pages\CreateRecord;
 class CreateImmProsedur extends CreateRecord
 {
     protected static string $resource = ImmProsedurResource::class;
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
 }

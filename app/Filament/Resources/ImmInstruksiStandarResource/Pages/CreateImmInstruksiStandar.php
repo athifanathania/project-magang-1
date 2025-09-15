@@ -7,4 +7,10 @@ use Filament\Resources\Pages\CreateRecord;
 class CreateImmInstruksiStandar extends CreateRecord
 {
     protected static string $resource = ImmInstruksiStandarResource::class;
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
+
 }

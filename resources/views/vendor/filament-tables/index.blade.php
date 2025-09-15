@@ -107,6 +107,16 @@
 
         return null;
     };
+
+    $resourceClass = method_exists($this, 'getResource') ? $this->getResource() : null;
+    
+    $showCaret = in_array($resourceClass, [
+        \App\Filament\Resources\BerkasResource::class,
+        \App\Filament\Resources\ImmManualMutuResource::class,
+        \App\Filament\Resources\ImmProsedurResource::class,
+        \App\Filament\Resources\ImmInstruksiStandarResource::class,
+        \App\Filament\Resources\ImmFormulirResource::class,
+    ], true);
 @endphp
 
 <div
@@ -885,6 +895,9 @@
                         @if ($isReordering)
                             <th></th>
                         @else
+                            @if ($showCaret)
+                                <th class="fi-ta-selection-cell w-1"></th>
+                            @endif
                             @if (count($actions) && $actionsPosition === ActionsPosition::BeforeCells)
                                 @if ($actionsColumnLabel)
                                     <x-filament-tables::header-cell>

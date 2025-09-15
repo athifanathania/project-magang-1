@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\HasImmVersions;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\ImmLampiran;
 
 class ImmInstruksiStandar extends Model
 {
@@ -15,7 +16,7 @@ class ImmInstruksiStandar extends Model
 
     protected $casts = [
         'keywords'     => 'array',
-        'versions'     => 'array',
+        'file_versions'=> 'array',
         'effective_at' => 'date',
         'expires_at'   => 'date',
     ];
@@ -23,5 +24,15 @@ class ImmInstruksiStandar extends Model
     protected static function storageBaseDir(): string
     {
         return 'imm/instruksi_standar';
+    }
+
+    public function immLampirans()
+    {
+        return $this->morphMany(ImmLampiran::class, 'documentable');
+    }
+
+    public function rootImmLampirans()
+    {
+        return $this->immLampirans()->whereNull('parent_id');
     }
 }

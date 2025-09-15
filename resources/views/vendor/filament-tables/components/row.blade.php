@@ -10,7 +10,7 @@
 
 @php
     $hasAlpineHiddenClasses = filled($alpineHidden);
-    $hasAlpineSelectedClasses = filled($alpineSelected);
+    $hasAlpineSelectedClasses = filled($alpineSelected);    
     $stripedClasses = 'bg-gray-50 dark:bg-white/5';
 
     /** @var null|\Illuminate\Database\Eloquent\Model $record */
@@ -19,6 +19,33 @@
         : $record);
 
     $isPublic = optional(\Filament\Facades\Filament::getCurrentPanel())->getId() === 'public';
+
+    $resourceClass = method_exists($this, 'getResource') ? $this->getResource() : null;
+    
+    $showCaret = in_array($resourceClass, [
+        \App\Filament\Resources\BerkasResource::class,
+        \App\Filament\Resources\ImmManualMutuResource::class,
+        \App\Filament\Resources\ImmProsedurResource::class,
+        \App\Filament\Resources\ImmInstruksiStandarResource::class,
+        \App\Filament\Resources\ImmFormulirResource::class,
+    ], true);
+
+    // ✅ Tambahkan ini: penanda apakah ini halaman IMM
+    $isImm = in_array($resourceClass, [
+        \App\Filament\Resources\ImmManualMutuResource::class,
+        \App\Filament\Resources\ImmProsedurResource::class,
+        \App\Filament\Resources\ImmInstruksiStandarResource::class,
+        \App\Filament\Resources\ImmFormulirResource::class,
+    ], true);
+
+    // fallback kalau dipanggil di konteks lain: cek tipe model record
+    if (! $isImm && $record) {
+        $isImm =
+            $record instanceof \App\Models\ImmManualMutu ||
+            $record instanceof \App\Models\ImmProsedur ||
+            $record instanceof \App\Models\ImmInstruksiStandar ||
+            $record instanceof \App\Models\ImmFormulir;
+    }
 @endphp
 
 <tr
@@ -38,7 +65,7 @@
     }}
 >
     {{-- ⬇️ Caret kiri untuk VIEWER – markup & kelas SAMA persis seperti di selection/checkbox.blade.php --}}
-    @if ($isPublic)
+    @if ($showCaret)
         <td class="fi-ta-selection-cell px-3 py-4">
             <div class="flex items-center justify-center gap-2">
                 <button
@@ -82,9 +109,13 @@
     >
         @php $lampirans = optional($record)->lampirans ?? collect(); @endphp
 
-        @include('tables.rows.lampirans-panel-plain', [
-            'record' => $record,
-            'lampirans' => $lampirans,
-        ])
+        @if ($isImm)
+            @include('tables.rows.imm-lampirans-panel-plain', ['record' => $record])
+        @else
+            @include('tables.rows.lampirans-panel-plain', [
+                'record' => $record,
+                'lampirans' => $lampirans,
+            ])
+        @endif
     </td>
 </tr>

@@ -94,9 +94,15 @@ trait HasImmVersions
         $disk = static::storageDisk();
         $dir  = rtrim(static::storageBaseDir(), '/').'/'.$this->getKey();
 
-        $originalName = $file->getClientOriginalName();
-        $ext   = strtolower($file->getClientOriginalExtension() ?: pathinfo($originalName, PATHINFO_EXTENSION));
-        $size  = (int) $file->getSize();
+        $originalName = method_exists($file, 'getClientOriginalName')
+        ? $file->getClientOriginalName()
+        : (string) ($file->getClientOriginalName ?? $file->getClientOriginalName() ?? 'file');
+
+        $ext  = method_exists($file, 'getClientOriginalExtension')
+            ? strtolower($file->getClientOriginalExtension() ?: pathinfo($originalName, PATHINFO_EXTENSION))
+            : strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+
+        $size = method_exists($file, 'getSize') ? (int) $file->getSize() : null;
 
         $storedName = now()->format('Ymd_His') . '-' . Str::random(6) . '-' . $originalName;
         $path = Storage::disk($disk)->putFileAs($dir, $file, $storedName);
@@ -128,9 +134,9 @@ trait HasImmVersions
         $versions->push($newVersion);
 
         // sync ke kolom model
-        $this->file_versions    = $versions->all();
-        $this->file             = $path;
-        $this->current_revision = $revCode; // kalau kolom ini sudah dihapus, baris ini boleh kamu hilangkan
+        $this->file_versions = $versions->all();
+        $this->file          = $path;
+        $this->revision      = $revCode;   
         if (blank($this->effective_at)) {
             $this->effective_at = now()->toDateString();
         }
