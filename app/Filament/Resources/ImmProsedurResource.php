@@ -70,12 +70,14 @@ class ImmProsedurResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('nama_dokumen')
                     ->label('Nama Dokumen')->wrap()
-                    ->extraCellAttributes(['class' => 'max-w-[28rem] whitespace-normal break-words'])
+                    ->extraCellAttributes(['class'=>'max-w-[28rem] whitespace-normal break-words'])
                     ->sortable()->searchable(),
 
+                // ⬇️ Tambahan kolom KATA KUNCI
                 Tables\Columns\ViewColumn::make('keywords_view')
                     ->label('Kata Kunci')
-                    ->state(function (\App\Models\ImmProsedur $record) {
+                    ->state(function (ImmProsedur $record) {
+                        // Ambil nilai mentah dari DB (bisa json string / array / csv)
                         $raw = $record->getRawOriginal('keywords');
 
                         $toArray = function ($v) {
@@ -83,24 +85,28 @@ class ImmProsedurResource extends Resource
                             if (is_string($v)) {
                                 $j = json_decode($v, true);
                                 if (json_last_error() === JSON_ERROR_NONE && is_array($j)) return $j;
-                                return preg_split('/\s*,\s*/u', $v, -1, PREG_SPLIT_NO_EMPTY);
+                                return preg_split('/\s*,\s*/u', $v, -1, PREG_SPLIT_NO_EMPTY); // CSV
                             }
                             if (is_array($v)) return $v;
                             return (array) $v;
                         };
 
-                        return collect($toArray($raw))
-                            ->flatMap(fn ($item) =>
-                                is_array($item) ? $item
-                                    : preg_split('/\s*,\s*/u', trim((string) $item), -1, PREG_SPLIT_NO_EMPTY)
+                        $arr = $toArray($raw);
+
+                        // Pecah juga item berbentuk CSV di dalam array
+                        return collect($arr)
+                            ->flatMap(fn($item) =>
+                                is_array($item)
+                                    ? $item
+                                    : preg_split('/\s*,\s*/u', trim((string)$item), -1, PREG_SPLIT_NO_EMPTY)
                             )
-                            ->map(fn ($s) => trim((string) $s, " \t\n\r\0\x0B\"'"))
+                            ->map(fn($s) => trim((string)$s, " \t\n\r\0\x0B\"'"))
                             ->filter()
                             ->unique()
                             ->values()
                             ->all();
                     })
-                    ->view('tables.columns.keywords-grid')
+                    ->view('tables.columns.keywords-grid') // ⬅️ chip view yang sama dengan halaman Berkas
                     ->extraCellAttributes(['class' => 'max-w-[24rem] whitespace-normal break-words'])
                     ->toggleable(),
 
@@ -114,7 +120,7 @@ class ImmProsedurResource extends Resource
                         shouldOpenInNewTab: true
                     )
                     ->color(fn ($record) => $record->file ? 'primary' : null)
-                    ->extraAttributes(['class' => 'text-blue-600 hover:underline']),
+                    ->extraAttributes(['class'=>'text-blue-600 hover:underline']),
             ])
             ->filters([
                 Tables\Filters\Filter::make('q')
@@ -125,8 +131,8 @@ class ImmProsedurResource extends Resource
                     ])
                     ->query(function (Builder $query, array $data) use ($tbl) {
                         $terms = collect($data['terms'] ?? [])
-                            ->filter(fn ($t) => is_string($t) && trim($t) !== '')
-                            ->map(fn ($t) => trim($t))->unique()->values()->all();
+                            ->filter(fn($t)=>is_string($t)&&trim($t)!=='')
+                            ->map(fn($t)=>trim($t))->unique()->values()->all();
                         if (empty($terms)) return;
 
                         $modeAll = (bool) ($data['all'] ?? false);
@@ -138,13 +144,8 @@ class ImmProsedurResource extends Resource
                         };
 
                         $query->where(function (Builder $outer) use ($terms, $modeAll, $one) {
-                            if ($modeAll) {
-                                foreach ($terms as $t) $outer->where(fn ($qq) => $one($qq, $t));
-                            } else {
-                                $outer->where(fn ($qq) => collect($terms)->each(
-                                    fn ($t) => $qq->orWhere(fn ($q) => $one($q, $t))
-                                ));
-                            }
+                            if ($modeAll) foreach ($terms as $t) $outer->where(fn($qq)=>$one($qq,$t));
+                            else $outer->where(fn($qq)=>collect($terms)->each(fn($t)=>$qq->orWhere(fn($q)=>$one($q,$t))));
                         });
                     })
                     ->indicateUsing(fn (array $data) =>
@@ -154,9 +155,9 @@ class ImmProsedurResource extends Resource
             ->actions([
                 Tables\Actions\ViewAction::make()->label('')->icon('heroicon-m-eye')->tooltip('Lihat (riwayat)'),
                 Tables\Actions\EditAction::make()->label('')->icon('heroicon-m-pencil')->tooltip('Edit')
-                    ->visible(fn () => auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false),
+                    ->visible(fn()=>auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false),
                 Tables\Actions\DeleteAction::make()->label('')->icon('heroicon-m-trash')->tooltip('Hapus')
-                    ->visible(fn () => auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false),
+                    ->visible(fn()=>auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([

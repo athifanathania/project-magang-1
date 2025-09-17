@@ -15,18 +15,33 @@ $hasChildren = $childrenAll->isNotEmpty();
 // file status
 $filePath = trim((string) ($lampiran->file ?? ''));
 $hasFile  = $filePath !== '';
-$openUrl  = $hasFile ? route('media.imm.lampiran', ['lampiran' => $lampiran->id]) : null;
+
+$type = class_basename($lampiran->documentable_type ?? '');
+
+$openUrl = $hasFile
+    ? route('media.imm.lampiran', ['lampiran' => $lampiran->id])   
+    : null;
 
 $editUrl  = \App\Filament\Resources\ImmLampiranResource::getUrl('edit', ['record' => $lampiran]);
 
-$branchHasFileFn = function (ImmLampiran $n) use (&$branchHasFileFn) {
-    if (trim((string) $n->file) !== '') return true;
+// ===== Cabang punya file? (node sendiri ATAU salah satu keturunan) =====
+$hasFileSelf = ($filePath !== '');
+
+$hasFileInDesc = function (ImmLampiran $n) use (&$hasFileInDesc): bool {
     $kids = $n->relationLoaded('childrenRecursive')
         ? $n->childrenRecursive
         : $n->children()->with('childrenRecursive')->get();
-    return $kids->some(fn ($c) => $branchHasFileFn($c));
+
+    foreach ($kids as $c) {
+        if (trim((string) ($c->file ?? '')) !== '' || $hasFileInDesc($c)) {
+            return true;
+        }
+    }
+    return false;
 };
-$isCompletelyMissing = ! $branchHasFileFn($lampiran);
+
+$branchHasFile       = $hasFileSelf || $hasFileInDesc($lampiran);
+$isCompletelyMissing = ! $branchHasFile;
 
 // keywords
 $toArray = function ($v) {
@@ -113,13 +128,22 @@ $canManageImm = ! $isPublic && (
 );
 @endphp
 
+@once
+<style>[x-cloak]{display:none!important}</style>
+@endonce
+
 @if ($shouldRender)
-<div class="rounded-lg border p-3 mb-2 w-full max-w-full overflow-hidden {{ $indent }} {{ $hasFile ? 'cursor-pointer hover:bg-blue-50/50' : '' }}" x-data>
+<div class="rounded-lg border p-3 mb-2 w-full max-w-full overflow-hidden {{ $indent }} {{ $hasFile ? 'cursor-pointer hover:bg-blue-50/50' : '' }}"
+     x-data="{ open: false }">
+
   <div class="flex items-start gap-2">
     @if ($hasChildren)
-      <button type="button" class="mt-1 w-5 h-5 flex items-center justify-center border rounded hover:bg-gray-50 shrink-0"
-              x-data="{open:false}" @click.stop="open=!open" :aria-expanded="open.toString()">
-        <span x-show="!open">▸</span><span x-show="open" x-cloak>▾</span>
+      <button type="button"
+              class="mt-1 w-5 h-5 flex items-center justify-center border rounded hover:bg-gray-50 shrink-0"
+              @click.stop="open = !open"
+              :aria-expanded="open.toString()">
+        <span x-show="!open">▸</span>
+        <span x-show="open" x-cloak>▾</span>
       </button>
     @else
       <span class="mt-1 w-5 h-5 inline-block shrink-0"></span>
@@ -127,7 +151,8 @@ $canManageImm = ! $isPublic && (
 
     <div class="min-w-0 w-full">
       <div class="flex items-center gap-2 flex-wrap">
-        <span class="font-semibold break-words {{ $isCompletelyMissing ? 'text-red-600' : 'text-gray-900' }}">
+        <span class="font-semibold break-words {{ $isCompletelyMissing ? 'text-red-600' : 'text-gray-900' }}"
+          style="{{ $isCompletelyMissing ? 'color:#dc2626' : '' }}">
           {{ $lampiran->nama ?? 'Tanpa judul' }}
         </span>
 

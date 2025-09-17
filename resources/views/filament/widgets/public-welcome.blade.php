@@ -11,7 +11,7 @@
                 <p class="mt-2 text-gray-600">
                     Ini adalah beranda publik. Anda bisa menelusuri dokumen tanpa login.
                     <br>
-                    <b>Login</b> hanya untuk <b>Admin</b> dan <b>Editor</b>. Jika Anda butuh akses Editor,
+                    <b>Login</b> hanya untuk User yang sudah ditambahkan oleh Admin. Jika Anda butuh akses Login,
                     silakan hubungi Admin.
                 </p>
             </div>

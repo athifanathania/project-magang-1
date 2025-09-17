@@ -4,9 +4,17 @@ use Filament\Facades\Filament;
 
 /** @var \Illuminate\Database\Eloquent\Model $record */
 
-// Roots untuk dokumen IMM yang sedang dirender:
+// dukung type campur: FQCN, morph class (alias), & short name
+$types = array_unique(array_filter([
+    get_class($record),                 // App\Models\ImmInstruksiStandar (FQCN)
+    ltrim($record->getMorphClass(), '\\'), // bisa FQCN / alias tergantung morphMap
+    class_basename($record),            // ImmInstruksiStandar (short)
+]));
+
+// ambil root lampiran untuk dokumen ini
 $items = ML::query()
-    ->whereMorphedTo('documentable', $record)
+    ->whereIn('documentable_type', $types)
+    ->where('documentable_id', $record->getKey())
     ->whereNull('parent_id')
     ->with('childrenRecursive')
     ->orderBy('id')
@@ -156,7 +164,7 @@ $canManageImm = ! $isPublic && (
     </div>
   @endif
 
-<x-filament::modal id="view-imm-lampiran-panel-{{ $record->getKey() }}" width="5xl" wire:ignore.self>
+<x-filament::modal id="view-imm-lampiran-panel-{{ $record->getKey() }}" width="7xl" wire:ignore.self>
     <x-slot name="heading">Lihat Lampiran IMM</x-slot>
 
     <livewire:imm-lampiran-viewer :wire:key="'viewer-imm-'.$record->id" />

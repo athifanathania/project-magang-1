@@ -8,9 +8,12 @@ use Filament\Actions;
 use App\Models\ImmLampiran;
 use Filament\Notifications\Notification;
 use Livewire\Attributes\On;
+use App\Livewire\Concerns\HandlesImmLampiran;
 
 class ListImmFormulirs extends ListRecords
 {
+    use HandlesImmLampiran;
+
     protected static string $resource = ImmFormulirResource::class;
 
     protected function getHeaderActions(): array
@@ -52,5 +55,37 @@ class ListImmFormulirs extends ListRecords
 
         $this->dispatch('$refresh');
         Notification::make()->title('Versi lampiran dihapus')->success()->send();
+    }
+
+    #[On('imm-delete-version')]
+    public function deleteImmVersionListener($lampiranId = null, $index = null): void
+    {
+        if (is_array($lampiranId)) {
+            // kalau dipanggil dengan array tunggal
+            $index      = $lampiranId['index']      ?? $index;
+            $lampiranId = $lampiranId['lampiranId'] ?? null;
+        }
+
+        $id  = (int) $lampiranId;
+        $idx = (int) $index;
+
+        if (! $id || $idx < 0) {
+            Notification::make()->title('Payload penghapusan tidak valid.')->danger()->send();
+            return;
+        }
+
+        $m = ImmLampiran::find($id);
+        if (! $m) {
+            Notification::make()->title('Lampiran tidak ditemukan')->danger()->send();
+            return;
+        }
+
+        if ($m->deleteVersionAtIndex($idx)) {
+            Notification::make()->title('Versi lampiran dihapus')->success()->send();
+        } else {
+            Notification::make()->title('Versi tidak ditemukan')->danger()->send();
+        }
+
+        $this->dispatch('$refresh'); // segarkan tabel/panel
     }
 }

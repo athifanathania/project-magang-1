@@ -1,5 +1,4 @@
 <?php
-// app/Filament/Resources/ImmLampiranResource/Pages/CreateImmLampiran.php
 
 namespace App\Filament\Resources\ImmLampiranResource\Pages;
 
@@ -11,10 +10,24 @@ class CreateImmLampiran extends CreateRecord
 {
     protected static string $resource = ImmLampiranResource::class;
 
-    /** Map model -> resource IMM */
+    /** Normalisasi: terima FQCN atau short name, kembalikan FQCN yang valid */
+    private function normalizeDocType(?string $type): ?string
+    {
+        if (! $type) return null;
+        $type = ltrim($type, '\\');
+
+        if (class_exists($type)) return $type;
+
+        $fqcn = 'App\\Models\\' . $type;
+        return class_exists($fqcn) ? $fqcn : null;
+    }
+
+    /** Map model -> resource IMM (pakai FQCN) */
     private function mapModelToResource(?string $model): ?string
     {
-        return match ($model) {
+        $m = $this->normalizeDocType($model);
+
+        return match ($m) {
             \App\Models\ImmManualMutu::class       => \App\Filament\Resources\ImmManualMutuResource::class,
             \App\Models\ImmProsedur::class         => \App\Filament\Resources\ImmProsedurResource::class,
             \App\Models\ImmInstruksiStandar::class => \App\Filament\Resources\ImmInstruksiStandarResource::class,
@@ -23,17 +36,30 @@ class CreateImmLampiran extends CreateRecord
         };
     }
 
-    protected function getRedirectUrl(): string
+    private function backUrl(): string
     {
-        // Pakai record yg baru dibuat (Livewire request tidak bawa query string).
-        $rec = $this->record;
+        $type = $this->record?->documentable_type
+            ?? request('documentable_type')
+            ?? request('doc_type');
 
-        if ($rec && ($res = $this->mapModelToResource($rec->documentable_type))) {
-            return $res::getUrl(); // balik ke list IMM induk
+        if ($res = $this->mapModelToResource($type)) {
+            // kalau mau, bisa kirim parameter agar auto-buka panel, contoh:
+            // return $res::getUrl('index', ['openLampiran' => 1, 'doc_id' => ($this->record->documentable_id ?? request('doc_id'))]);
+            return $res::getUrl('index');
         }
 
-        // fallback aman
-        return static::getResource()::getUrl('index');
+        // fallback yang lebih aman dari dashboard:
+        return url()->previous() ?: route('filament.admin.pages.dashboard');
+    }
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->backUrl();
+    }
+
+    protected function afterCreate(): void
+    {
+        $this->redirect($this->backUrl(), navigate: true);
     }
 
     protected function getSavedNotification(): ?Notification
@@ -43,15 +69,13 @@ class CreateImmLampiran extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        // isi doc_type/doc_id dari query string
         if ($t = request('doc_type')) {
-            $data['documentable_type'] = str_starts_with($t, 'App\\Models\\') ? $t : ('App\\Models\\' . $t);
+            $data['documentable_type'] = $this->normalizeDocType($t) ?? $t;
         }
         if ($id = request('doc_id')) {
             $data['documentable_id'] = (int) $id;
         }
 
-        // root harus NULL, bukan 0
         $parent = $data['parent_id'] ?? request('parent_id');
         $data['parent_id'] = ($parent && (int) $parent > 0) ? (int) $parent : null;
 

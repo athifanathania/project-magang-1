@@ -1,5 +1,4 @@
 <?php
-// app/Filament/Resources/ImmLampiranResource/Pages/EditImmLampiran.php
 
 namespace App\Filament\Resources\ImmLampiranResource\Pages;
 
@@ -11,10 +10,22 @@ class EditImmLampiran extends EditRecord
 {
     protected static string $resource = ImmLampiranResource::class;
 
-    /** Map model -> resource IMM */
+    private function normalizeDocType(?string $type): ?string
+    {
+        if (! $type) return null;
+        $type = ltrim($type, '\\');
+
+        if (class_exists($type)) return $type;
+
+        $fqcn = 'App\\Models\\' . $type;
+        return class_exists($fqcn) ? $fqcn : null;
+    }
+
     private function mapModelToResource(?string $model): ?string
     {
-        return match ($model) {
+        $m = $this->normalizeDocType($model);
+
+        return match ($m) {
             \App\Models\ImmManualMutu::class       => \App\Filament\Resources\ImmManualMutuResource::class,
             \App\Models\ImmProsedur::class         => \App\Filament\Resources\ImmProsedurResource::class,
             \App\Models\ImmInstruksiStandar::class => \App\Filament\Resources\ImmInstruksiStandarResource::class,
@@ -27,7 +38,6 @@ class EditImmLampiran extends EditRecord
     {
         parent::mount($record);
 
-        // tampilkan hint kalau datang dari "Tambahkan file"
         if (request()->boolean('missingFile')) {
             Notification::make()
                 ->title('Silakan tambahkan file lampiran')
@@ -36,16 +46,28 @@ class EditImmLampiran extends EditRecord
         }
     }
 
-    protected function getRedirectUrl(): string
+    private function backUrl(): string
     {
-        $rec = $this->record;
+        $type = $this->record?->documentable_type
+            ?? request('documentable_type')
+            ?? request('doc_type');
 
-        if ($rec && ($res = $this->mapModelToResource($rec->documentable_type))) {
-            return $res::getUrl(); // balik ke list IMM induk
+        if ($res = $this->mapModelToResource($type)) {
+            // bisa juga kirim parameter jika mau auto-buka sesuatu
+            return $res::getUrl('index');
         }
 
-        // fallback aman
-        return static::getResource()::getUrl('index');
+        return url()->previous() ?: route('filament.admin.pages.dashboard');
+    }
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->backUrl();
+    }
+
+    protected function afterSave(): void
+    {
+        $this->redirect($this->backUrl(), navigate: true);
     }
 
     protected function getSavedNotification(): ?Notification

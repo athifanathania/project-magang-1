@@ -2,7 +2,7 @@
     use Filament\Facades\Filament;
     $user = Filament::auth()->user();
     $name = $user?->name ?? 'Admin';
-    $roleLabel = $user?->hasRole('Admin') ? 'Admin' : ($user?->hasRole('Editor') ? 'Editor' : 'Admin/Editor');
+    $roleLabel = $user?->hasRole('Admin') ? 'Admin' : ($user?->hasRole('Editor') ? 'Editor' : 'Staff');
 @endphp
 
 <div class="mx-auto w-full max-w-5xl">

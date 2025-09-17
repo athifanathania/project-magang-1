@@ -7,4 +7,9 @@ use Filament\Resources\Pages\EditRecord;
 class EditImmProsedur extends EditRecord
 {
     protected static string $resource = ImmProsedurResource::class;
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
 }
