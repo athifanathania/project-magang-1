@@ -17,13 +17,33 @@
                 </tr>
             @endif
 
-            @php $isPublic = optional(\Filament\Facades\Filament::getCurrentPanel())->getId() === 'public'; @endphp
-<tr class="bg-gray-50 dark:bg-white/5">
-    @if ($isPublic)
-        <th class="w-1"></th> {{-- kolom caret (lebar sama seperti kolom checkbox admin) --}}
-    @endif
-    {{ $header }}
-</tr>
+            @php
+                $resourceClass = method_exists($this, 'getResource') ? $this->getResource() : null;
+
+                $supportsCaret = in_array($resourceClass, [
+                    \App\Filament\Resources\BerkasResource::class,
+                    \App\Filament\Resources\ImmManualMutuResource::class,
+                    \App\Filament\Resources\ImmProsedurResource::class,
+                    \App\Filament\Resources\ImmInstruksiStandarResource::class,
+                    \App\Filament\Resources\ImmFormulirResource::class,
+                ], true);
+
+                $hasSelection = method_exists($this, 'isTableSelectionEnabled')
+                    ? $this->isTableSelectionEnabled()
+                    : false;
+
+                // header caret hanya kalau BUTUH kolom sendiri (tidak ada selection)
+                $showCaretHeaderCol = $supportsCaret && ! $hasSelection;
+            @endphp
+
+            <tr class="bg-gray-50 dark:bg-white/5">
+                @if ($showCaretHeaderCol)
+                    <th class="fi-ta-selection-cell w-1">
+                        <div class="px-3 py-3"></div>
+                    </th>
+                @endif
+                {{ $header }}
+            </tr>
 
         </thead>
     @endif

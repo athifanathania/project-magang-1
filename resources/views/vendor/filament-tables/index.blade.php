@@ -895,9 +895,6 @@
                         @if ($isReordering)
                             <th></th>
                         @else
-                            @if ($showCaret)
-                                <th class="fi-ta-selection-cell w-1"></th>
-                            @endif
                             @if (count($actions) && $actionsPosition === ActionsPosition::BeforeCells)
                                 @if ($actionsColumnLabel)
                                     <x-filament-tables::header-cell>

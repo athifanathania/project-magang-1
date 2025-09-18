@@ -273,15 +273,17 @@
 
       <x-filament::button color="primary" type="button"
         x-on:click.stop.prevent="
-          const payload = {
-            lampiranId: editVersion.lampiranId,
-            index:      editVersion.index,
-            description: editVersion.description ?? ''
-          };
+          const id   = Number(editVersion.lampiranId ?? 0);
+          const idx  = Number(editVersion.index ?? -1);
+          const desc = String(editVersion.description ?? '');
 
+          // 1) KIRIM EVENT DULU
+          window.Livewire.dispatch('imm-update-version-desc', id, idx, desc);
+
+          // 2) BARU TUTUP MODAL
           $dispatch('close-modal', { id: 'edit-imm-version-{{ $rec->getKey() }}' });
-          window.Livewire.dispatch('imm-update-version-desc', payload);
 
+          // 3) OPSIONAL refresh ringan setelah Livewire selesai
           setTimeout(() => {
             window.location.replace(window.location.pathname + window.location.search);
           }, 150);

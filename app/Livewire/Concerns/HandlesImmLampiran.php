@@ -58,10 +58,6 @@ trait HandlesImmLampiran
     #[On('imm-update-version-desc')]
     public function updateVersionDescription($payloadOrId = null, $index = null, $description = null): void
     {
-        // SUPPORT 2 BENTUK PAYLOAD:
-        // a) dispatch('imm-update-version-desc', { lampiranId: 1, index: 2, description: '...' })
-        // b) call('updateVersionDescription', 1, 2, '...')
-
         if (is_array($payloadOrId)) {
             $description = $payloadOrId['description'] ?? $description;
             $index       = $payloadOrId['index']       ?? $index;
