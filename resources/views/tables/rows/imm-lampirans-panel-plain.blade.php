@@ -106,6 +106,29 @@ $canManageImm = ! $isPublic && (
     // atau policy (kalau nanti ada)
     || $user?->can('create', \App\Models\ImmLampiran::class)
 );
+
+$resourceClass = method_exists($this, 'getResource') ? $this->getResource() : null;
+
+    $heading = match (true) {
+        // via resource class (halaman admin)
+        $resourceClass === \App\Filament\Resources\ImmManualMutuResource::class
+            || $record instanceof \App\Models\ImmManualMutu
+            => 'Lihat Lampiran Manual Mutu',
+
+        $resourceClass === \App\Filament\Resources\ImmProsedurResource::class
+            || $record instanceof \App\Models\ImmProsedur
+            => 'Lihat Lampiran Prosedur',
+
+        $resourceClass === \App\Filament\Resources\ImmInstruksiStandarResource::class
+            || $record instanceof \App\Models\ImmInstruksiStandar
+            => 'Lihat Lampiran Instruksi & Standar Kerja',
+
+        $resourceClass === \App\Filament\Resources\ImmFormulirResource::class
+            || $record instanceof \App\Models\ImmFormulir
+            => 'Lihat Lampiran Formulir',
+
+        default => 'Lihat Lampiran IMM',
+    };
 @endphp
 
 @once
@@ -165,13 +188,13 @@ $canManageImm = ! $isPublic && (
   @endif
 
 <x-filament::modal id="view-imm-lampiran-panel-{{ $record->getKey() }}" width="7xl" wire:ignore.self>
-    <x-slot name="heading">Lihat Lampiran IMM</x-slot>
+    <x-slot name="heading">{{ $heading }}</x-slot>
 
     <livewire:imm-lampiran-viewer :wire:key="'viewer-imm-'.$record->id" />
 
     <x-slot name="footer">
         <x-filament::button color="gray"
-            x-on:click="$dispatch('close-modal', { id: 'view-imm-lampiran-panel-{{ $record->id }}' })">
+            x-on:click="$dispatch('close-modal', { id: 'view-imm-lampiran-panel-{{ $record->getKey() }}' })">
             Tutup
         </x-filament::button>
     </x-slot>

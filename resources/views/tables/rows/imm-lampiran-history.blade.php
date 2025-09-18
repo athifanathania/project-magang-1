@@ -8,7 +8,30 @@
 
     $lampiranName = $rec?->nama ?: 'Lampiran';
 
-    $all      = collect($rec?->file_versions ?? []);
+    $all = collect($rec?->file_versions ?? []);
+
+    // sisipkan baris file aktif di akhir lalu nanti direverse (jadi paling atas)
+    if (!blank($rec?->file)) {
+        $currSize = null;
+        try {
+            if (Storage::disk('private')->exists($rec->file)) {
+                $currSize = Storage::disk('private')->size($rec->file);
+            }
+        } catch (\Throwable $e) {}
+
+        $all->push([
+            'filename'    => basename($rec->file),
+            'path'        => $rec->file,
+            'size'        => $currSize,
+            'ext'         => pathinfo($rec->file, PATHINFO_EXTENSION),
+            // pakai updated_at (fallback created_at) sbg tgl terbit file aktif
+            'uploaded_at' => optional($rec->updated_at ?? $rec->created_at)->toDateTimeString(),
+            'replaced_at' => null,
+            // biar label REV konsisten saja—hitung di view dari index
+        ]);
+    }
+
+    // tampilkan terbaru dulu
     $versions = $all->reverse()->values();
 
     $canEdit     = auth()->user()?->hasAnyRole(['Admin','Editor']);
@@ -67,10 +90,13 @@
 @endphp
 
 @if ($versions->isNotEmpty())
-<div x-data="{
+<div
+  x-data="{
     toDeleteVersion: { lampiranId: null, index: null, name: '' },
-    editVersion:     { lampiranId: null, index: null, name: '', description: '' }
-}">
+    editVersion:     { lampiranId: null, index: null, name: '', description: '' },
+    pageId: '{{ $this->getId() }}', 
+  }"
+>
   <div class="mt-4">
     <h3 class="text-sm font-semibold">Riwayat file dari lampiran <span class="text-gray-900">"{{ $lampiranName }}"</span></h3>
 
@@ -125,7 +151,9 @@
                 $sizeText = $sizeBytes ? $fmtSize($sizeBytes) : '-';
 
                 // REVxx
-                $displayRevision = 'REV' . str_pad((int)($v['revision'] ?? ($originalIndex + 1)), 2, '0', STR_PAD_LEFT);
+                $revRaw = (string)($v['revision'] ?? '');
+                $revNum = preg_match('/\d+/', $revRaw, $m) ? max(1, (int)$m[0]) : ($originalIndex + 1);
+                $displayRevision = 'REV' . str_pad($revNum, 2, '0', STR_PAD_LEFT);
             @endphp
 
             <tr class="odd:bg-white even:bg-gray-50/30 hover:bg-gray-50/70">
@@ -149,17 +177,23 @@
 
               <td class="px-3 py-2 border">{{ $displayRevision }}</td>
               <td class="px-3 py-2 border">{{ $v['description'] ?? '-' }}</td>
+              @php
+                  $originalIndex = $all->count() - 1 - $i;
+
+                  // REVxx dari posisi (hindari 00)
+                  $revNum = max(1, $originalIndex + 1);
+                  $displayRevision = 'REV' . str_pad($revNum, 2, '0', STR_PAD_LEFT);
+              @endphp
               <td class="px-3 py-2 border">{{ $fmtDate($v['uploaded_at'] ?? null) }}</td>
               <td class="px-3 py-2 border">{{ $fmtDate($v['replaced_at'] ?? null) }}</td>
               <td class="px-3 py-2 border whitespace-nowrap">{{ $sizeText }}</td>
 
               @if ($showActions)
-              <td class="px-3 py-2 border">
-                <div class="flex items-center gap-1">
+              <td class="px-3 py-2 border text-center align-middle">
+                <div class="inline-flex items-center justify-center gap-1">
                   @if ($canDownload)
                     <a href="{{ route('media.imm.version', ['id' => $rec->getKey(), 'index' => $originalIndex]) }}"
-                       class="inline-flex items-center justify-center w-7 h-7 rounded-md hover:bg-gray-100"
-                       title="Download">
+                       class="inline-flex items-center justify-center w-7 h-7 rounded-md hover:bg-gray-100" title="Download">
                       <x-filament::icon icon="heroicon-m-arrow-down-tray" class="w-4 h-4 text-blue-600"/>
                     </a>
                   @endif
@@ -170,7 +204,7 @@
                       title="Edit revisi"
                       @click.stop.prevent="
                         editVersion = {
-                          lampiranId: {{ $rec->getKey() }},   
+                          lampiranId: {{ $rec->getKey() }},
                           index: {{ $originalIndex }},
                           name:  @js($fileName),
                           description: @js($v['description'] ?? '')
@@ -186,8 +220,8 @@
                       class="inline-flex items-center justify-center w-7 h-7 rounded-md hover:bg-gray-100"
                       title="Hapus revisi"
                       @click.stop.prevent="
-                          toDeleteVersion = { docId: {{ $rec->getKey() }}, index: {{ $originalIndex }}, name: @js($fileName) };
-                          $dispatch('open-modal', { id: 'confirm-delete-imm-version-{{ $rec->getKey() }}' });
+                        toDeleteVersion = { lampiranId: {{ $rec->getKey() }}, index: {{ $originalIndex }}, name: @js($fileName) };
+                        $dispatch('open-modal', { id: 'confirm-delete-imm-version-{{ $rec->getKey() }}' });
                       ">
                       <x-filament::icon icon="heroicon-m-trash" class="w-4 h-4 text-red-600"/>
                     </button>
@@ -220,25 +254,12 @@
 
       <x-filament::button color="danger" type="button"
         x-on:click.stop.prevent="
-          const payload = { lampiranId: toDeleteVersion.docId, index: toDeleteVersion.index };
-
           $dispatch('close-modal', { id: 'confirm-delete-imm-version-{{ $rec->getKey() }}' });
-
-          setTimeout(() => {
-            // ✅ kirim event global ke halaman ListImmManualMutus
-            window.Livewire.dispatch('imm-delete-version', payload);
-
-            // opsional: refresh UI
-            setTimeout(() => {
-              window.location.replace(window.location.pathname + window.location.search);
-            }, 200);
-          }, 80);
-
-          // bereskan lock scroll (opsional)
-          document.body.classList.remove('fi-modal-open','overflow-hidden');
-          document.documentElement.classList.remove('overflow-hidden');
-          document.body.style.overflow='';
-          document.documentElement.style.overflow='';
+          const payload = {
+            lampiranId: Number(toDeleteVersion.lampiranId),
+            index: Number(toDeleteVersion.index)
+          };
+          window.Livewire.dispatch('imm-delete-version', payload);
         ">
         Hapus
       </x-filament::button>
@@ -276,19 +297,10 @@
           const payload = {
             lampiranId: Number(editVersion.lampiranId ?? 0),
             index:      Number(editVersion.index ?? -1),
-            description: String(editVersion.description ?? '')
+            description:String(editVersion.description ?? '')
           };
-
-          // KIRIM EVENT
           window.Livewire.dispatch('imm-update-version-desc', payload);
-
-          // TUTUP MODAL
           $dispatch('close-modal', { id: 'edit-imm-version-{{ $rec->getKey() }}' });
-
-          // Opsional: refresh ringan
-          setTimeout(() => {
-            window.location.replace(window.location.pathname + window.location.search);
-          }, 120);
         ">
         Simpan
       </x-filament::button>

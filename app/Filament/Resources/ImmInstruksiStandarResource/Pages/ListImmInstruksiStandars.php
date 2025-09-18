@@ -9,10 +9,12 @@ use App\Models\ImmLampiran;
 use Filament\Notifications\Notification;
 use Livewire\Attributes\On;
 use App\Livewire\Concerns\HandlesImmLampiran;
+use App\Livewire\Concerns\HandlesImmDocVersions;
 
 class ListImmInstruksiStandars extends ListRecords
 {
     use HandlesImmLampiran;
+    use HandlesImmDocVersions;
 
     protected static string $resource = ImmInstruksiStandarResource::class;
 

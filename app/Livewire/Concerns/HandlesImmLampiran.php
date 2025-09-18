@@ -50,9 +50,14 @@ trait HandlesImmLampiran
     }
 
     #[On('imm-delete-version')]
-    public function onDeleteImmVersionEvent(array $payload): void
+    public function onDeleteImmVersionEvent($payload = null): void
     {
-        $this->onDeleteImmVersion($payload);
+        if (is_string($payload)) {
+            $payload = json_decode($payload, true) ?? [];
+        }
+        if (!is_array($payload)) $payload = [];
+
+        $this->onDeleteImmVersion($payload); // <- method yang sudah ada
     }
 
     #[On('imm-update-version-desc')]

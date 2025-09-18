@@ -57,7 +57,7 @@ class UserResource extends Resource
                         'success' => fn ($state) => $state === true,
                         'danger'  => fn ($state) => $state === false,
                     ])
-                    ->icon(fn ($state) => $state ? 'heroicon-m-check-circle' : 'heroicon-m-x-circle'),
+                    ->icon(fn ($state) =>   $state ? 'heroicon-m-check-circle' : 'heroicon-m-x-circle'),
 
                 Tables\Columns\TagsColumn::make('roles.name')->label('Roles'),
             ])
@@ -107,11 +107,20 @@ class UserResource extends Resource
             Forms\Components\TextInput::make('email')
                 ->email()->required()->maxLength(255)->unique(ignoreRecord: true),
 
-            Forms\Components\TextInput::make('department')
+            Forms\Components\Select::make('department')
                 ->label('Departemen')
-                ->maxLength(100)
-                ->datalist(['QC', 'PPC', 'Audit Internal', 'HRD', 'Purchasing', 'Marketing'])
-                ->placeholder('Mis. QC, PPC, Audit Internal, HRD'),
+                ->options([
+                    'QC' => 'QC',
+                    'PPC' => 'PPC',
+                    'Produksi' => 'Produksi',
+                    'Audit Internal' => 'Audit Internal',
+                    'HRD' => 'HRD',
+                    'Purchasing' => 'Purchasing',
+                    'Marketing' => 'Marketing',
+                    'IT' => 'IT',
+                ])
+                ->searchable()
+                ->placeholder('Pilih Departemen'),
 
             Forms\Components\Toggle::make('is_active')
                 ->label('User Active')

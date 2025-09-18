@@ -59,7 +59,7 @@ class ImmManualMutuResource extends Resource
                     ->label('Kata Kunci')->separator(',')->reorderable()->disabledOn('view'),
             ])->columns(2),
 
-            Forms\Components\Section::make('Riwayat Dokumen')
+            Forms\Components\Section::make('Riwayat Dokumen Manual Mutu')
                 ->visibleOn('view')
                 ->schema([
                     Forms\Components\View::make('imm_history')
@@ -159,7 +159,7 @@ class ImmManualMutuResource extends Resource
                     ),
             ])
             ->actions([
-                Tables\Actions\ViewAction::make()->label('')->icon('heroicon-m-eye')->tooltip('Lihat (riwayat)'),
+                Tables\Actions\ViewAction::make()->label('')->icon('heroicon-m-eye')->tooltip('Lihat (riwayat)')->modalWidth('7xl'),
                 Tables\Actions\EditAction::make()->label('')->icon('heroicon-m-pencil')->tooltip('Edit')
                     ->visible(fn()=>auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false),
                 Tables\Actions\DeleteAction::make()->label('')->icon('heroicon-m-trash')->tooltip('Hapus')

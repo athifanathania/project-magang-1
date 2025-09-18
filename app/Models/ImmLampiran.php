@@ -9,6 +9,8 @@ use Illuminate\Validation\ValidationException;
 class ImmLampiran extends Model
 {
     use SoftDeletes;
+    protected ?string $oldFilePath = null;
+    protected ?string $oldUploadedAt = null;
 
     protected $guarded = [];
     protected $casts = [
@@ -36,21 +38,23 @@ class ImmLampiran extends Model
         return $this->children()->with('childrenRecursive');
     }
 
-    protected ?string $oldFilePath = null;
-
     protected static function booted(): void
     {
-        // Simpan path lama jika file berubah
         static::updating(function (self $m) {
             if ($m->isDirty('file')) {
-                $m->oldFilePath = $m->getOriginal('file');
+                $m->oldFilePath   = $m->getOriginal('file');
+                // ambil waktu "terbit" versi lama = kapan file aktif itu terakhir diset
+                $m->oldUploadedAt = optional(
+                    $m->getOriginal('updated_at') ?? $m->getOriginal('created_at')
+                )->toDateTimeString();
             }
         });
 
         static::saved(function (self $m) {
             if ($m->wasChanged('file') && $m->oldFilePath) {
-                $m->appendFileVersion($m->oldFilePath, auth()->id());
+                $m->appendFileVersion($m->oldFilePath, auth()->id(), $m->oldUploadedAt);
                 $m->oldFilePath = null;
+                $m->oldUploadedAt = null;
                 $m->saveQuietly();
             }
         });
@@ -60,7 +64,7 @@ class ImmLampiran extends Model
         });
     }
 
-    public function appendFileVersion(?string $oldPath, ?int $userId = null): void
+    public function appendFileVersion(?string $oldPath, ?int $userId = null, ?string $uploadedAt = null): void
     {
         if (!$oldPath) return;
 
@@ -77,12 +81,15 @@ class ImmLampiran extends Model
             'filename'    => basename($oldPath),
             'size'        => $disk->size($newPath),
             'ext'         => pathinfo($newPath, PATHINFO_EXTENSION),
-            'uploaded_at' => now()->toDateTimeString(),
+            // penting: uploaded_at = kapan versi lama “terbit”
+            'uploaded_at' => $uploadedAt ?: now()->toDateTimeString(),
+            // dan baru sekarang “diubah/diganti”
             'replaced_at' => now()->toDateTimeString(),
             'by'          => $userId,
         ];
         $this->file_versions = $versions;
     }
+
 
     public function deleteVersionAtIndex(int $index): bool
     {

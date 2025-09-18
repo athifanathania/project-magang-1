@@ -69,10 +69,10 @@ trait HasImmVersions
     {
         $last = $this->latestVersion();
         if (!$last || !preg_match('/^rev(\d{1,})$/i', (string) ($last['revision'] ?? ''), $m)) {
-            return 'Rev01';
+            return 'REV01';
         }
         $n = (int) $m[1] + 1;
-        return 'Rev' . str_pad((string) $n, 2, '0', STR_PAD_LEFT);
+        return 'REV' . str_pad((string) $n, 2, '0', STR_PAD_LEFT);
         // (kalau mau 3 digit: STR_PAD_LEFT ke 3)
     }
 
@@ -96,7 +96,7 @@ trait HasImmVersions
 
         $originalName = method_exists($file, 'getClientOriginalName')
         ? $file->getClientOriginalName()
-        : (string) ($file->getClientOriginalName ?? $file->getClientOriginalName() ?? 'file');
+        : (string) ($file->getClientOriginalName() ?? 'file');
 
         $ext  = method_exists($file, 'getClientOriginalExtension')
             ? strtolower($file->getClientOriginalExtension() ?: pathinfo($originalName, PATHINFO_EXTENSION))
@@ -146,11 +146,7 @@ trait HasImmVersions
         return $newVersion;
     }
 
-    /**
-     * Hapus versi berdasarkan index (0-based) sesuai urutan tersimpan.
-     * - Menghapus file fisik
-     * - Perbarui kolom file/current_revision jika versi aktif dihapus
-     */
+    // GANTI seluruh method ini
     public function deleteVersionAtIndex(int $index): bool
     {
         $versions = $this->versionsList();
@@ -158,17 +154,47 @@ trait HasImmVersions
 
         $removed = $versions->pull($index);
 
-        // hapus file fisik (abaikan error)
         if (!empty($removed['file_path'])) {
             Storage::disk(static::storageDisk())->delete($removed['file_path']);
         }
 
-        // jika yang dihapus adalah versi terakhir (aktif), fallback ke versi sebelumnya
+        if ($versions->isEmpty()) {
+            $this->file = null;
+            $this->revision = null;
+            $this->file_versions = [];
+            $this->save();
+            return true;
+        }
+
+        // kalau yang dihapus versi aktif, fallback ke sebelumnya
         if ($index === $versions->count()) {
             $prev = $versions->last();
-            $this->file             = $prev['file_path'] ?? null;
-            $this->current_revision = $prev['revision']  ?? null;
+            $this->file     = $prev['file_path'] ?? null;
+            $this->revision = $prev['revision']  ?? null;
         }
+
+        // RENUMBER: Rev01, Rev02, ...
+        $versions = $versions->values()->map(function ($row, $i) {
+            $row['revision'] = 'REV' . str_pad((string)($i + 1), 2, '0', STR_PAD_LEFT);
+            return $row;
+        });
+
+        // sinkronkan current revision ke terakhir
+        $this->revision      = $versions->last()['revision'] ?? $this->revision;
+        $this->file_versions = $versions->all();
+        $this->save();
+
+        return true;
+    }
+
+    public function updateVersionDescription(int $index, string $description): bool
+    {
+        $versions = $this->versionsList();
+        if ($index < 0 || $index >= $versions->count()) return false;
+
+        $row = $versions->get($index);
+        $row['description'] = trim($description);
+        $versions->put($index, $row);
 
         $this->file_versions = $versions->values()->all();
         $this->save();
