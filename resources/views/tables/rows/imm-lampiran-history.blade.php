@@ -170,9 +170,9 @@
                       title="Edit revisi"
                       @click.stop.prevent="
                         editVersion = {
-                          lampiranId: {{ $rec->getKey() }},
-                          index: {{ $originalIndex }},      // <- index versi asli di array
-                          name:  @js($fileName),            // <- nama file versi ini
+                          lampiranId: {{ $rec->getKey() }},   
+                          index: {{ $originalIndex }},
+                          name:  @js($fileName),
                           description: @js($v['description'] ?? '')
                         };
                         $dispatch('open-modal', { id: 'edit-imm-version-{{ $rec->getKey() }}' });
@@ -273,23 +273,26 @@
 
       <x-filament::button color="primary" type="button"
         x-on:click.stop.prevent="
-          const id   = Number(editVersion.lampiranId ?? 0);
-          const idx  = Number(editVersion.index ?? -1);
-          const desc = String(editVersion.description ?? '');
+          const payload = {
+            lampiranId: Number(editVersion.lampiranId ?? 0),
+            index:      Number(editVersion.index ?? -1),
+            description: String(editVersion.description ?? '')
+          };
 
-          // 1) KIRIM EVENT DULU
-          window.Livewire.dispatch('imm-update-version-desc', id, idx, desc);
+          // KIRIM EVENT
+          window.Livewire.dispatch('imm-update-version-desc', payload);
 
-          // 2) BARU TUTUP MODAL
+          // TUTUP MODAL
           $dispatch('close-modal', { id: 'edit-imm-version-{{ $rec->getKey() }}' });
 
-          // 3) OPSIONAL refresh ringan setelah Livewire selesai
+          // Opsional: refresh ringan
           setTimeout(() => {
             window.location.replace(window.location.pathname + window.location.search);
-          }, 150);
+          }, 120);
         ">
         Simpan
       </x-filament::button>
+
     </x-slot>
   </x-filament::modal>
 </div>

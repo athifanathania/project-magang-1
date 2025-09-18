@@ -56,17 +56,24 @@ trait HandlesImmLampiran
     }
 
     #[On('imm-update-version-desc')]
-    public function updateVersionDescription($payloadOrId = null, $index = null, $description = null): void
+    public function updateVersionDescription(...$args): void
     {
-        if (is_array($payloadOrId)) {
-            $description = $payloadOrId['description'] ?? $description;
-            $index       = $payloadOrId['index']       ?? $index;
-            $payloadOrId = $payloadOrId['lampiranId']  ?? null;
-        }
+        // Normalisasi argumen:
+        // - Kalau dikirim {lampiranId, index, description} -> $args[0] adalah array
+        // - Kalau dikirim 3 argumen terpisah -> $args = [id, index, description]
 
-        $id   = (int) $payloadOrId;
-        $idx  = (int) $index;
-        $desc = trim((string) ($description ?? ''));
+        $id = null; $idx = null; $desc = null;
+
+        if (count($args) === 1 && is_array($args[0])) {
+            $payload = $args[0];
+            $id   = (int) ($payload['lampiranId'] ?? 0);
+            $idx  = (int) ($payload['index'] ?? -1);
+            $desc = trim((string) ($payload['description'] ?? ''));
+        } elseif (count($args) >= 3) {
+            $id   = (int) $args[0];
+            $idx  = (int) $args[1];
+            $desc = trim((string) ($args[2] ?? ''));
+        }
 
         if (! $id || $idx < 0) {
             Notification::make()->title('Payload edit revisi tidak valid.')->danger()->send();
@@ -90,16 +97,13 @@ trait HandlesImmLampiran
             return;
         }
 
-        // Update hanya kolom deskripsi
+        // Update hanya deskripsi
         $versions[$idx]['description'] = $desc;
         $m->file_versions = array_values($versions);
         $m->save();
 
-        // segarkan halaman list (panel lampiran ikut rerender karena di dalam page)
         $this->dispatch('$refresh');
         Notification::make()->title('Deskripsi revisi diperbarui')->success()->send();
-
-        // Opsional: broadcast event untuk komponen viewer bila kamu ingin dia refresh sendiri
-        // $this->dispatch('imm-version-updated', id: $m->id)->self();
     }
+
 }
