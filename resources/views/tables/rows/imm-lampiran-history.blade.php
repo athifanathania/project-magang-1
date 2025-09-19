@@ -8,9 +8,17 @@
 
     $lampiranName = $rec?->nama ?: 'Lampiran';
 
-    $all = collect($rec?->file_versions ?? []);
+    // AMBIL RAW terlebih dahulu
+    $raw = $rec?->file_versions ?? [];
 
-    // sisipkan baris file aktif di akhir lalu nanti direverse (jadi paling atas)
+    $all = collect($raw)->filter(function ($v, $k) {
+        $isNumeric = is_int($k) || ctype_digit((string)$k);
+        return $isNumeric
+            && is_array($v)
+            && (isset($v['file_path']) || isset($v['path']) || isset($v['filename']));
+    });
+
+    // Sisipkan baris file aktif (paling atas nantinya)
     if (!blank($rec?->file)) {
         $currSize = null;
         try {
@@ -24,10 +32,10 @@
             'path'        => $rec->file,
             'size'        => $currSize,
             'ext'         => pathinfo($rec->file, PATHINFO_EXTENSION),
-            // pakai updated_at (fallback created_at) sbg tgl terbit file aktif
             'uploaded_at' => optional($rec->updated_at ?? $rec->created_at)->toDateTimeString(),
             'replaced_at' => null,
-            // biar label REV konsisten saja—hitung di view dari index
+            // ⬇️ ambil deskripsi versi aktif dari meta
+            'description' => data_get($raw, '__current_desc'),
         ]);
     }
 
@@ -87,6 +95,8 @@
             default                         => 'bg-gray-100 text-gray-700 ring-gray-200',
         };
     };
+    
+    
 @endphp
 
 @if ($versions->isNotEmpty())
@@ -134,25 +144,25 @@
         <tbody>
           @foreach ($versions as $i => $v)
             @php
+                // hitung index asli (index di array $all)
                 $originalIndex = $all->count() - 1 - $i;
 
-                // nama file asli (fallback basename dari path)
-                $fileName = trim((string)($v['filename'] ?? basename((string)($v['path'] ?? '')))) ?: '-';
-
-                // ekstensi + warna label
-                $ext = strtolower($v['ext'] ?? pathinfo($fileName, PATHINFO_EXTENSION) ?? '');
-                $extClass = $extColor($ext);
-
-                // ukuran
+                // nama/ekstensi/ukuran (punyamu sudah oke)
+                $fileName  = trim((string)($v['filename'] ?? basename((string)($v['path'] ?? '')))) ?: '-';
+                $ext       = strtolower($v['ext'] ?? pathinfo($fileName, PATHINFO_EXTENSION) ?? '');
+                $extClass  = $extColor($ext);
                 $sizeBytes = $v['size'] ?? null;
                 if (!$sizeBytes && !empty($v['path']) && Storage::disk('private')->exists($v['path'])) {
                     try { $sizeBytes = Storage::disk('private')->size($v['path']); } catch (\Throwable $e) {}
                 }
-                $sizeText = $sizeBytes ? $fmtSize($sizeBytes) : '-';
+                $sizeText  = $sizeBytes ? $fmtSize($sizeBytes) : '-';
 
-                // REVxx
-                $revRaw = (string)($v['revision'] ?? '');
-                $revNum = preg_match('/\d+/', $revRaw, $m) ? max(1, (int)$m[0]) : ($originalIndex + 1);
+                // ●● penting: baris aktif = tidak punya replaced_at
+                $isActive = empty($v['replaced_at']);
+
+                // label revisi (fallback dari posisi, agar tidak REV00)
+                $revRaw  = (string)($v['revision'] ?? '');
+                $revNum  = preg_match('/\d+/', $revRaw, $m) ? max(1, (int)$m[0]) : ($originalIndex + 1);
                 $displayRevision = 'REV' . str_pad($revNum, 2, '0', STR_PAD_LEFT);
             @endphp
 
@@ -174,16 +184,8 @@
                   </div>
                 </div>
               </td>
-
               <td class="px-3 py-2 border">{{ $displayRevision }}</td>
               <td class="px-3 py-2 border">{{ $v['description'] ?? '-' }}</td>
-              @php
-                  $originalIndex = $all->count() - 1 - $i;
-
-                  // REVxx dari posisi (hindari 00)
-                  $revNum = max(1, $originalIndex + 1);
-                  $displayRevision = 'REV' . str_pad($revNum, 2, '0', STR_PAD_LEFT);
-              @endphp
               <td class="px-3 py-2 border">{{ $fmtDate($v['uploaded_at'] ?? null) }}</td>
               <td class="px-3 py-2 border">{{ $fmtDate($v['replaced_at'] ?? null) }}</td>
               <td class="px-3 py-2 border whitespace-nowrap">{{ $sizeText }}</td>
@@ -191,9 +193,10 @@
               @if ($showActions)
               <td class="px-3 py-2 border text-center align-middle">
                 <div class="inline-flex items-center justify-center gap-1">
+                  {{-- Download / Edit / Hapus hanya untuk VERSI NON-AKTIF --}}
                   @if ($canDownload)
                     <a href="{{ route('media.imm.version', ['id' => $rec->getKey(), 'index' => $originalIndex]) }}"
-                       class="inline-flex items-center justify-center w-7 h-7 rounded-md hover:bg-gray-100" title="Download">
+                      class="inline-flex items-center justify-center w-7 h-7 rounded-md hover:bg-gray-100" title="Download">
                       <x-filament::icon icon="heroicon-m-arrow-down-tray" class="w-4 h-4 text-blue-600"/>
                     </a>
                   @endif
@@ -215,7 +218,7 @@
                     </button>
                   @endif
 
-                  @if ($canDelete)
+                  @if ($canDelete && ! $isActive)
                     <button type="button"
                       class="inline-flex items-center justify-center w-7 h-7 rounded-md hover:bg-gray-100"
                       title="Hapus revisi"
@@ -252,14 +255,13 @@
         Batal
       </x-filament::button>
 
-      <x-filament::button color="danger" type="button"
+      <x-filament::button color="danger"
         x-on:click.stop.prevent="
           $dispatch('close-modal', { id: 'confirm-delete-imm-version-{{ $rec->getKey() }}' });
-          const payload = {
-            lampiranId: Number(toDeleteVersion.lampiranId),
-            index: Number(toDeleteVersion.index)
-          };
-          window.Livewire.dispatch('imm-delete-version', payload);
+          window.Livewire.find(pageId).call('onDeleteImmVersion', {
+            lampiranId: Number(toDeleteVersion.lampiranId ?? toDeleteVersion.id ?? 0),
+            index: Number(toDeleteVersion.index ?? -1)
+          });
         ">
         Hapus
       </x-filament::button>
@@ -295,11 +297,11 @@
       <x-filament::button color="primary" type="button"
         x-on:click.stop.prevent="
           const payload = {
-            lampiranId: Number(editVersion.lampiranId ?? 0),
+            lampiranId: Number(editVersion.lampiranId ?? editVersion.id ?? 0),
             index:      Number(editVersion.index ?? -1),
             description:String(editVersion.description ?? '')
           };
-          window.Livewire.dispatch('imm-update-version-desc', payload);
+          window.Livewire.find(pageId).call('updateVersionDescription', payload);
           $dispatch('close-modal', { id: 'edit-imm-version-{{ $rec->getKey() }}' });
         ">
         Simpan

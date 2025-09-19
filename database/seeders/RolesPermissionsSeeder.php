@@ -28,7 +28,7 @@ class RolesPermissionsSeeder extends Seeder
         // Buat role
         $admin  = Role::firstOrCreate(['name' => 'Admin',  'guard_name' => 'web']);
         $editor = Role::firstOrCreate(['name' => 'Editor', 'guard_name' => 'web']);
-        $staf   = Role::firstOrCreate(['name' => 'Staf',   'guard_name' => 'web']);
+        $staff   = Role::firstOrCreate(['name' => 'Staff',   'guard_name' => 'web']);
         $viewer = Role::firstOrCreate(['name' => 'Viewer', 'guard_name' => 'web']);
 
         // Admin -> semua izin
@@ -43,7 +43,7 @@ class RolesPermissionsSeeder extends Seeder
         ]);
 
         // Staf -> hanya view + download
-        $staf->syncPermissions([
+        $staff->syncPermissions([
             'berkas.view','lampiran.view','imm.view',
             'berkas.download','lampiran.download','imm.download',
         ]);

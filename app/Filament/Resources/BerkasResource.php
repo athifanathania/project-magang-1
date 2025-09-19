@@ -40,6 +40,9 @@ use Illuminate\Support\Str;
 use Filament\Forms\Components\Actions;
 use Filament\Forms\Components\Actions\Action as FormAction;
 use Filament\Facades\Filament;
+use Illuminate\Support\Facades\Gate;
+use App\Filament\Support\RowClickViewForNonEditors;
+use App\Filament\Support\FileCell;
 
 class BerkasResource extends Resource
 {
@@ -51,6 +54,8 @@ class BerkasResource extends Resource
 
     protected static ?string $modelLabel = 'dokumen';   // singular
     protected static ?string $pluralModelLabel = 'Regular'; // plural
+
+    use RowClickViewForNonEditors, FileCell;
 
     public static function form(Form $form): Form
     {
@@ -132,15 +137,33 @@ class BerkasResource extends Resource
                                     : null,
                                 shouldOpenInNewTab: true
                             )
-                            ->visible(fn ($record) => filled($record?->dokumen))
+                            ->visible(fn ($record) =>
+                                filled($record?->dokumen)
+                                && (auth()->user()?->hasAnyRole(['Admin','Editor','Staff']) ?? false)
+                            )
                     )
                     ->deleteUploadedFileUsing(fn () => null),
+
+                FileUpload::make('dokumen_src')
+                    ->label('File Asli (Admin saja)')
+                    ->disk('private')
+                    ->directory('berkas/_source')     // pisahkan folder sumber
+                    ->preserveFilenames()
+                    ->rules(['nullable','file'])
+                    ->previewable(true)
+                    ->downloadable(false)             // jangan expose URL publik
+                    ->openable(false)
+                    ->getUploadedFileNameForStorageUsing(fn ($file) =>
+                        now()->format('Ymd_His') . '-' . Str::random(6) . '-' . $file->getClientOriginalName()
+                    )
+                    ->visible(fn () => auth()->user()?->hasRole('Admin') ?? false),
+
 
                 // =========================
                 // Lampiran (disarankan kelola via tabel/aksi)
                 // =========================
                 \Filament\Forms\Components\Section::make('Lampiran')
-                    ->description('Kelola lampiran melalui tombol "Lampiran" / "Kelola Lampiran" di tabel.'),
+                    ->description('Kelola lampiran melalui tombol "Lampiran" / "Tambah Lampiran" di tabel.'),
                 Section::make('Riwayat dokumen')
                     ->visible(fn (string $context) => $context === 'view') // hanya muncul di modal View
                     ->schema([
@@ -154,7 +177,7 @@ class BerkasResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table
+        return static::applyRowClickPolicy($table)   
             ->columns([
                 TextColumn::make('customer_name')
                     ->label('Cust Name')
@@ -211,15 +234,9 @@ class BerkasResource extends Resource
                     ->extraCellAttributes([
                         'class' => 'max-w-[22rem] whitespace-normal break-words',
                     ]),
-                TextColumn::make('dokumen_link')
+                static::fileTextColumn('dokumen', fn ($record) => route('media.berkas', $record))
                     ->label('File')
-                    ->state(fn ($record) => $record->dokumen ? '📂' : '-')
-                    ->url(fn ($record) => $record->dokumen ? route('media.berkas', $record) : null, shouldOpenInNewTab: true)
-                    ->color(fn ($record) => $record->dokumen ? 'primary' : null)
-                    ->extraAttributes(['class' => 'text-blue-600 hover:underline'])
-                    ->extraCellAttributes(['class' => 'text-xs'])   // <<< kecilkan font
-                    ->sortable(false)
-                    ->searchable(false),
+                    ->extraCellAttributes(['class' => 'text-xs']),
                 ])
                 ->filters([
                     Filter::make('q')
@@ -301,7 +318,7 @@ class BerkasResource extends Resource
                 ])
                 ->actions([
                     Action::make('lampiran')
-                        ->label('Lampiran')
+                        ->label('')
                         ->icon('heroicon-m-paper-clip')
                         ->color('gray')
                         ->size('xs')                   // << kecilkan font
@@ -330,6 +347,20 @@ class BerkasResource extends Resource
                         ->icon('heroicon-m-trash')
                         ->tooltip('Hapus')
                         ->visible(fn () => auth()->user()?->hasAnyRole(['Admin', 'Editor']) ?? false),
+
+                    Action::make('downloadSource')
+                        ->label('')
+                        ->icon('heroicon-o-arrow-down-tray')
+                        ->url(fn ($record) => route('download.source', [
+                            'type' => 'berkas',
+                            'id'   => $record->getKey(),
+                        ]))
+                        ->openUrlInNewTab()
+                        ->visible(fn () => \Illuminate\Support\Facades\Gate::allows('download-source'))
+                        ->disabled(fn ($record) => blank($record->dokumen_src))
+                        ->tooltip(fn ($record) => blank($record->dokumen_src) ? 'File asli belum diunggah' : null),
+
+                        
                 ])
             
             ->bulkActions([

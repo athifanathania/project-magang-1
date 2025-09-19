@@ -29,7 +29,8 @@ class Berkas extends Model
     protected $casts = [
         'keywords'         => 'array',
         'is_public'        => 'boolean',
-        'dokumen_versions' => 'array',   // <— penting
+        'dokumen_versions' => 'array', 
+        'dokumen_src_versions'   => 'array',
     ];
 
     /* ===========================

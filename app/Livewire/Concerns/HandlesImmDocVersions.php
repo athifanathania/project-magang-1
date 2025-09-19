@@ -73,7 +73,7 @@ trait HandlesImmDocVersions
                 return $m->save();
             })();
 
-        Notification::make()->title($ok ? 'Deskripsi revisi diperbarui' : 'Versi tidak ditemukan')->{$ok?'success':'danger'}()->send();
         $this->dispatch('$refresh');
+        Notification::make()->title('Deskripsi revisi diperbarui')->success()->send();
     }
 }

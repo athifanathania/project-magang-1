@@ -233,14 +233,15 @@ $resourceClass = method_exists($this, 'getResource') ? $this->getResource() : nu
             Batal
         </x-filament::button>
         <x-filament::button color="danger"
-            x-on:click.stop.prevent="
-                $dispatch('close-modal', { id: 'confirm-delete-imm-version' });
-                window.Livewire.find(pageId).call('handleDeleteImmLampiranVersion', toDeleteVersion.lampiranId, toDeleteVersion.index)
-            ">
-            Hapus
+        x-on:click.stop.prevent="
+            $dispatch('close-modal', { id: 'confirm-delete-imm-version' });
+            window.Livewire.find(pageId).call('onDeleteImmVersion', {
+            lampiranId: Number(toDeleteVersion.lampiranId ?? toDeleteVersion.id ?? 0),
+            index: Number(toDeleteVersion.index ?? -1)
+            });
+        ">
+        Hapus
         </x-filament::button>
     </x-slot>
 </x-filament::modal>
-
-
 </div>

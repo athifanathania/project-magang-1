@@ -93,7 +93,8 @@ class Lampiran extends Model
     }
 
     protected $casts = [
-        'file_versions' => 'array',   // <— penting
+        'file_versions' => 'array',   
+        'file_src_versions'    => 'array',
         // 'keywords' => 'array', 
     ];
 

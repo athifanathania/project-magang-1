@@ -7,13 +7,8 @@ use App\Models\ImmLampiran;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\File;
+use App\Http\Controllers\DownloadSourceController;
 
-// JANGAN redirect / ke /berkas supaya panel publik Filament bisa jalan
-// Route::redirect('/', '/berkas');
-
-//
-// Akses file AKTIF (stream). Boleh publik, tapi tetap lewat Policy (`BerkasPolicy@view`).
-//
 Route::get('/media/berkas/{berkas}', [MediaController::class, 'berkas'])
     ->whereNumber('berkas')
     ->name('media.berkas');
@@ -33,6 +28,16 @@ Route::middleware('auth')->group(function () {
     Route::get('/media/lampiran/{lampiran}/version/{index}', [MediaController::class, 'lampiranVersion'])
         ->whereNumber(['lampiran', 'index'])
         ->name('media.lampiran.version');
+});
+
+Route::middleware(['auth'])->group(function () {
+    Route::get('/download/source/{type}/{id}', DownloadSourceController::class)
+        ->whereIn('type', [
+            'berkas','lampiran','imm-lampiran',
+            'imm-manual-mutu','imm-prosedur','imm-instruksi-standar','imm-formulir',
+        ])
+        ->whereNumber('id')
+        ->name('download.source');
 });
 
 // --- BUKA FILE LAMPIRAN IMM (letakkan DI ATAS route generik) ---

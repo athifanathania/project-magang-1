@@ -189,9 +189,7 @@ $canCreateLampiran = $user?->can('lampiran.create') ?? false;
 
         @if ( ($kelolaUrl && $canViewLampiran) || ($tambahUrl && $canCreateLampiran) )
             <div class="panel-actions">
-            @if ($kelolaUrl && $canViewLampiran)
-                <a href="{{ $kelolaUrl }}" class="btn-ghost">Kelola Lampiran</a>
-            @endif
+        
             @if ($tambahUrl && $canCreateLampiran)
                 <a href="{{ $tambahUrl }}" class="btn-ghost">+ Tambah Lampiran</a>
             @endif

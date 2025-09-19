@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Schema;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Filament\Forms\Components\Actions\Action as FormAction;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class ImmLampiranResource extends Resource
 {
@@ -149,7 +150,20 @@ class ImmLampiranResource extends Resource
                         )
                         ->visible(fn ($record) => filled($record?->file))
                 ),
-
+            FileUpload::make('file_src')
+                ->label('File Asli (Admin saja)')
+                ->disk('private')
+                ->directory('imm/lampiran/_source')
+                ->preserveFilenames()
+                ->rules(['nullable','file'])
+                ->previewable(true)
+                ->downloadable(false)
+                ->openable(false)
+                ->getUploadedFileNameForStorageUsing(fn ($file) =>
+                    now()->format('Ymd_His') . '-' . Str::random(6) . '-' . $file->getClientOriginalName()
+                )
+                ->visible(fn () => auth()->user()?->hasRole('Admin') ?? false)
+                ->helperText('Hanya Admin yang dapat mengganti file asli'),
         ])->columns(2),
 
         Section::make('Riwayat lampiran')

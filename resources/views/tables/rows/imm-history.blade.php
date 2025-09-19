@@ -221,21 +221,20 @@
     </x-slot>
     <x-slot name="footer">
       <x-filament::button color="gray" x-on:click="$dispatch('close-modal', { id: 'edit-imm-doc-version-{{ $rec->getKey() }}' })">Batal</x-filament::button>
-      <x-filament::button color="primary"
-        x-on:click.stop.prevent="
-          const payload = {
-            type: '{{ $type }}',
-            id: Number(editVersion.id ?? 0),
-            index: Number(editVersion.index ?? -1),
-            description: String(editVersion.description ?? '')
-          };
-          // ✅ panggil method Livewire langsung (bukan dispatch event)
-          window.Livewire.find(pageId).call('onDocUpdateVersionDesc', payload);
-          $dispatch('close-modal', { id: 'edit-imm-doc-version-{{ $rec->getKey() }}' });
-          setTimeout(() => window.location.replace(window.location.pathname + window.location.search), 140);
-        ">
-        Simpan
-      </x-filament::button>
+        <x-filament::button color="primary"
+            x-on:click.stop.prevent="
+                const payload = {
+                type: '{{ $type }}',
+                id: Number(editVersion.id ?? 0),
+                index: Number(editVersion.index ?? -1),
+                description: String(editVersion.description ?? '')
+                };
+                window.Livewire.find(pageId).call('onDocUpdateVersionDesc', payload);
+                $dispatch('close-modal', { id: 'edit-imm-doc-version-{{ $rec->getKey() }}' });
+                editVersion = { id: null, index: null, name: '', description: '' };
+            ">
+            Simpan
+        </x-filament::button>
     </x-slot>
   </x-filament::modal>
 </div>

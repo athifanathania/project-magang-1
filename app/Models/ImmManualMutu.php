@@ -19,6 +19,7 @@ class ImmManualMutu extends Model
         'file_versions'=> 'array',
         'effective_at'     => 'date',
         'expires_at'       => 'date',
+        'file_src_versions'    => 'array',
     ];
 
     protected static function storageBaseDir(): string

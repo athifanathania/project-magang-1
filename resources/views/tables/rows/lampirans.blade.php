@@ -119,9 +119,6 @@ $tambahUrl  = (isset($record) && $record instanceof MBerkas)
         </div>
         @if ($kelolaUrl || $tambahUrl)
         <div class="panel-actions">
-            @if ($kelolaUrl && auth()->user()?->can('lampiran.view'))
-            <a href="{{ $kelolaUrl }}" class="btn-ghost">Kelola Lampiran</a>
-            @endif
             @if ($tambahUrl && auth()->user()?->can('lampiran.create'))
             <a href="{{ $tambahUrl }}" class="btn-ghost">+ Tambah Lampiran</a>
             @endif

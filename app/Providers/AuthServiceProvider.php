@@ -4,6 +4,7 @@ namespace App\Providers;
 
 // use Illuminate\Support\Facades\Gate;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
+use Illuminate\Support\Facades\Gate;
 
 class AuthServiceProvider extends ServiceProvider
 {
@@ -22,6 +23,13 @@ class AuthServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        Gate::define('download-source', fn ($user) =>
+            $user?->hasAnyRole(['Admin','Editor','Staff']) === true
+        );
+
+        Gate::define('replace-source', fn ($user) =>
+            $user?->hasRole('Admin') === true
+        );
     }
+
 }

@@ -22,10 +22,16 @@ use Filament\Forms\Components\Section;
 use Filament\Forms\Components\View as ViewField;
 use Filament\Tables\Actions\EditAction;
 use Filament\Tables\Actions\DeleteAction;
+use Filament\Forms\Components\FileUpload;
+use Illuminate\Support\Str;
+use App\Filament\Support\RowClickViewForNonEditors;
+use App\Filament\Support\FileCell;
 
 class LampiranResource extends Resource
 {
     // protected static bool $shouldRegisterNavigation = false;
+    protected static bool $shouldRegisterNavigation = false; // sembunyikan dari sidebar
+    protected static bool $isGloballySearchable   = false;
 
     protected static ?string $model = Lampiran::class;
 
@@ -35,6 +41,8 @@ class LampiranResource extends Resource
 
     protected static ?string $modelLabel = 'lampiran';
     protected static ?string $pluralModelLabel = 'Dokumen Pelengkap';
+
+    use RowClickViewForNonEditors, FileCell;
 
     public static function form(Form $form): Form
     {
@@ -72,31 +80,6 @@ class LampiranResource extends Resource
                 ->disabled($readonly)
                 ->maxLength(255),
 
-            // ===== File Lampiran (PRIVATE) =====
-            Forms\Components\FileUpload::make('file')
-                ->disk('private')
-                ->disabled($readonly)
-                ->directory('lampiran')
-                ->preserveFilenames()
-                ->rules(['nullable', 'file'])
-                ->previewable(true)
-                ->downloadable(false) // JANGAN generate URL publik
-                ->openable(false)     // JANGAN open via Storage::url
-                ->hintAction(
-                    FormAction::make('openFile')
-                        ->label('Buka file')
-                        ->url(
-                            fn ($record) => ($record && $record->file)
-                                ? route('media.berkas.lampiran', [
-                                    'berkas'  => $record->berkas_id,
-                                    'lampiran'=> $record->id,
-                                ])
-                                : null,
-                            shouldOpenInNewTab: true
-                        )
-                        ->visible(fn ($record) => filled($record?->file))
-                ),
-
             Forms\Components\TagsInput::make('keywords')
                 ->label('Kata Kunci')
                 ->placeholder('New tag')
@@ -133,6 +116,46 @@ class LampiranResource extends Resource
                             ->view('tables.rows.lampiran-history')
                             ->columnSpanFull(),
                     ]),
+            // ===== File Lampiran (PRIVATE) =====
+            Forms\Components\FileUpload::make('file')
+                ->disk('private')
+                ->disabled($readonly)
+                ->directory('lampiran')
+                ->preserveFilenames()
+                ->rules(['nullable', 'file'])
+                ->previewable(true)
+                ->downloadable(false) // JANGAN generate URL publik
+                ->openable(false)     // JANGAN open via Storage::url
+                ->hintAction(
+                    FormAction::make('openFile')
+                        ->label('Buka file')
+                        ->url(
+                            fn ($record) => ($record && $record->file)
+                                ? route('media.berkas.lampiran', [
+                                    'berkas'  => $record->berkas_id,
+                                    'lampiran'=> $record->id,
+                                ])
+                                : null,
+                            shouldOpenInNewTab: true
+                        )
+                        ->visible(fn ($record) => filled($record?->file))
+                ),
+            FileUpload::make('file_src')
+                ->label('File Asli (Admin saja)')
+                ->disk('private')
+                ->directory('lampiran/_source')
+                ->preserveFilenames()
+                ->rules(['nullable','file'])
+                ->previewable(true)
+                ->downloadable(false)
+                ->openable(false)
+                ->getUploadedFileNameForStorageUsing(fn ($file) =>
+                    now()->format('Ymd_His') . '-' . Str::random(6) . '-' . $file->getClientOriginalName()
+                )
+                ->visible(fn () => auth()->user()?->hasRole('Admin') ?? false)
+                ->helperText('Hanya Admin yang dapat mengganti file asli'),
+
+            
         ]);
     }
 

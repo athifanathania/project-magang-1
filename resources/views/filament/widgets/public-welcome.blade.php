@@ -23,7 +23,7 @@
                 </x-filament::button>
 
                 <x-filament::button tag="a" href="/admin/login">
-                    Masuk Admin/Editor
+                    Masuk User
                 </x-filament::button>
             </div>
         </div>

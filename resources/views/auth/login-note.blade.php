@@ -1,5 +1,5 @@
 <div class="mt-3 text-center text-sm text-gray-600">
-    Login ini khusus untuk User (<b>Admin</b>, <b>Staf</b> dan <b>Editor</b>).
+    Login ini khusus untuk User (<b>Admin</b>, <b>Staff</b> dan <b>Editor</b>).
     Jika Anda membutuhkan akses User, silakan hubungi Admin untuk dibuatkan akun.
 </div>
 

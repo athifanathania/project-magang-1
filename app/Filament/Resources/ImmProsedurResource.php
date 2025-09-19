@@ -19,6 +19,11 @@ use Filament\Tables\Actions\ViewAction;
 use Filament\Tables\Actions\EditAction;
 use Filament\Tables\Actions\DeleteAction;
 use Filament\Tables\Filters\Filter;
+use Illuminate\Support\Facades\Gate;
+use Filament\Tables\Actions\Action;
+use Filament\Forms\Components\Actions\Action as FormAction;
+use App\Filament\Support\RowClickViewForNonEditors;
+use App\Filament\Support\FileCell;
 
 class ImmProsedurResource extends Resource
 {
@@ -29,7 +34,8 @@ class ImmProsedurResource extends Resource
     protected static ?string $pluralModelLabel= 'Prosedur';
     protected static ?int    $navigationSort  = 2; 
     protected static ?string $navigationIcon  = 'heroicon-o-document-text';
-
+    
+    use RowClickViewForNonEditors, FileCell;
     public static function form(Form $form): Form
     {
         return $form->schema([
@@ -47,10 +53,36 @@ class ImmProsedurResource extends Resource
                             return $ver['file_path'] ?? $record->file;
                         }
                         return $file->store('imm/tmp', 'private');
-                    }),
+                    })
+                    ->hintAction(
+                        FormAction::make('openFile')
+                            ->label('Buka file')
+                            ->url(
+                                fn ($record) => ($record && $record->file)
+                                    ? route('media.imm.file', ['type' => 'prosedur', 'id' => $record->getKey()])
+                                    : null,
+                                shouldOpenInNewTab: true
+                            )
+                            ->visible(fn ($record) => filled($record?->file))
+                    ),
 
                 Forms\Components\TagsInput::make('keywords')
                     ->label('Kata Kunci')->separator(',')->reorderable()->disabledOn('view'),
+                FileUpload::make('file_src')
+                    ->label('File Asli (Admin saja)')
+                    ->disk('private')
+                    ->directory('imm/prosedur/_source')
+                    ->preserveFilenames()
+                    ->rules(['nullable','file'])
+                    ->previewable(true)
+                    ->downloadable(false)
+                    ->openable(false)
+                    ->getUploadedFileNameForStorageUsing(fn ($file) =>
+                        now()->format('Ymd_His').'-'.\Illuminate\Support\Str::random(6).'-'.$file->getClientOriginalName()
+                    )
+                    ->visible(fn () => auth()->user()?->hasRole('Admin') ?? false)
+                    ->helperText('Hanya Admin yang dapat mengganti file asli'),
+
             ])->columns(2),
 
             Forms\Components\Section::make('Riwayat Dokumen Prosedur')
@@ -66,7 +98,7 @@ class ImmProsedurResource extends Resource
     {
         $tbl = (new \App\Models\ImmProsedur)->getTable();
 
-        return $table
+        return static::applyRowClickPolicy($table)   
             ->columns([
                 Tables\Columns\TextColumn::make('nama_dokumen')
                     ->label('Nama Dokumen')->wrap()
@@ -158,6 +190,17 @@ class ImmProsedurResource extends Resource
                     ->visible(fn()=>auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false),
                 Tables\Actions\DeleteAction::make()->label('')->icon('heroicon-m-trash')->tooltip('Hapus')
                     ->visible(fn()=>auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false),
+                Action::make('downloadSource')
+                    ->label('')
+                    ->icon('heroicon-o-arrow-down-tray')
+                    ->url(fn ($record) => route('download.source', [
+                        'type' => 'imm-prosedur',
+                        'id'   => $record->getKey(),
+                    ]))
+                    ->openUrlInNewTab()
+                    ->visible(fn () => Gate::allows('download-source'))
+                    ->disabled(fn ($record) => blank($record->file_src))
+                    ->tooltip(fn ($record) => blank($record->file_src) ? 'File asli belum diunggah' : null),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([

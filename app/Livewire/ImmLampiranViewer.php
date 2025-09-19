@@ -13,6 +13,7 @@ use Livewire\Attributes\On;
 class ImmLampiranViewer extends Component implements HasForms
 {
     use InteractsWithForms;
+    use \App\Livewire\Concerns\HandlesImmLampiran;
 
     public ?ImmLampiran $record = null;
     public ?array $data = [];

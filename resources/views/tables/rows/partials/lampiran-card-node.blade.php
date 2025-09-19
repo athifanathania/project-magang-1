@@ -9,6 +9,7 @@
 ])
 
 @php
+    use Filament\Facades\Filament;
     use Illuminate\Support\Facades\Storage;
 
     // === Ambil SEMUA children (pakai eager kalau sudah dimuat) ===
@@ -152,6 +153,15 @@
         $children = $children->filter(fn ($c) => $branchMatches($c))->values();
         $hasChildren = $children->isNotEmpty();
     }
+
+    $currUser       = Filament::auth()->user();               // user yang sedang login di panel
+    $hasFileSrc     = filled($lampiran->file_src);
+    $ext            = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+    $nonPdfInFile   = $hasFile && $ext !== 'pdf';             // legacy
+
+    $showDlIcon     = Gate::forUser($currUser)->allows('download-source');   // Viewer => false
+    $canDownloadAct = $showDlIcon && ($hasFileSrc || $nonPdfInFile);         // aktif kalau ada sumber
+    $downloadSrcUrl = route('download.source', ['type' => 'lampiran', 'id' => $lampiran->id]);
 @endphp
 
 @once
@@ -239,22 +249,37 @@
                         <a href="{{ $openUrl }}" target="_blank" rel="noopener"
                         class="text-sm font-medium hover:underline" style="color:#2563eb"
                         @click.stop>
-                        Buka
+                            Buka
                         </a>
                     @elseif ($canUpdate)
                         <a href="{{ $editUrl }}?missingFile=1"
                         class="text-sm font-medium hover:underline text-amber-700"
                         @click.stop>
-                        Tambahkan file
+                            Tambahkan file
                         </a>
                     @else
                         <button type="button"
                                 class="text-sm font-medium text-gray-500 hover:text-gray-700"
                                 @click.stop.prevent="$dispatch('show-no-file', { name: '{{ addslashes($lampiran->nama ?? 'Lampiran') }}' })">
-                        File belum tersedia
+                            File belum tersedia
                         </button>
                     @endif
-                    </div>
+
+                    {{-- 🔽 tombol download file asli (hanya Admin/Editor/Staff & jika ada file_src) --}}
+                    @if ($showDlIcon)
+                        @if ($canDownloadAct)
+                            <a href="{{ $downloadSrcUrl }}" target="_blank" rel="noopener"
+                            class="text-gray-600 hover:text-gray-900" title="Unduh file asli"
+                            @click.stop>
+                                <x-filament::icon icon="heroicon-m-arrow-down-tray" class="w-4 h-4" />
+                            </a>
+                        @else
+                            <span class="text-gray-300 cursor-not-allowed" title="File asli belum diunggah">
+                                <x-filament::icon icon="heroicon-m-arrow-down-tray" class="w-4 h-4" />
+                            </span>
+                        @endif
+                    @endif
+                </div>
                     <a href="#"
                         class="text-gray-600 hover:text-gray-900"
                         title="Lihat"
