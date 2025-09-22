@@ -30,15 +30,18 @@ Route::middleware('auth')->group(function () {
         ->name('media.lampiran.version');
 });
 
-Route::middleware(['auth'])->group(function () {
+Route::middleware('auth')->group(function () {
     Route::get('/download/source/{type}/{id}', DownloadSourceController::class)
-        ->whereIn('type', [
-            'berkas','lampiran','imm-lampiran',
-            'imm-manual-mutu','imm-prosedur','imm-instruksi-standar','imm-formulir',
-        ])
+        ->whereIn('type', ['berkas','lampiran','imm-lampiran','imm-manual-mutu','imm-prosedur','imm-instruksi-standar','imm-formulir'])
         ->whereNumber('id')
         ->name('download.source');
+
+    Route::get('/download/source/{type}/{id}/v/{index}', [DownloadSourceController::class, 'version'])
+        ->whereIn('type', ['berkas','lampiran','imm-lampiran','imm-manual-mutu','imm-prosedur','imm-instruksi-standar','imm-formulir'])
+        ->whereNumber(['id','index'])
+        ->name('download.source.version');
 });
+
 
 // --- BUKA FILE LAMPIRAN IMM (letakkan DI ATAS route generik) ---
 Route::get('/media/imm/lampiran/{lampiran}', function (ImmLampiran $lampiran) {

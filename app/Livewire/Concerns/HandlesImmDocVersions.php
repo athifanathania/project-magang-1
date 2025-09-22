@@ -14,6 +14,7 @@ trait HandlesImmDocVersions
             'prosedur'          => \App\Models\ImmProsedur::class,
             'instruksi-standar' => \App\Models\ImmInstruksiStandar::class,
             'formulir'          => \App\Models\ImmFormulir::class,
+            'berkas'            => \App\Models\Berkas::class,
             default             => null,
         };
     }

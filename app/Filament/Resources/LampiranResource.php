@@ -109,13 +109,6 @@ class LampiranResource extends Resource
                 ->reorderable()
                 ->separator(','),
 
-                Section::make('Riwayat lampiran')
-                    ->visible(fn (string $context) => $context === 'view')   // <- pakai context, bukan request()
-                    ->schema([
-                        \Filament\Forms\Components\View::make('lampiran_history')
-                            ->view('tables.rows.lampiran-history')
-                            ->columnSpanFull(),
-                    ]),
             // ===== File Lampiran (PRIVATE) =====
             Forms\Components\FileUpload::make('file')
                 ->disk('private')
@@ -149,14 +142,18 @@ class LampiranResource extends Resource
                 ->previewable(true)
                 ->downloadable(false)
                 ->openable(false)
-                ->getUploadedFileNameForStorageUsing(fn ($file) =>
-                    now()->format('Ymd_His') . '-' . Str::random(6) . '-' . $file->getClientOriginalName()
-                )
                 ->visible(fn () => auth()->user()?->hasRole('Admin') ?? false)
                 ->helperText('Hanya Admin yang dapat mengganti file asli'),
-
             
-        ]);
+            Section::make('Riwayat lampiran')
+            ->visible(fn (string $context) => $context === 'view')
+            ->schema([
+                \Filament\Forms\Components\View::make('lampiran_history')
+                    ->view('tables.rows.lampiran-history')
+                    ->columnSpanFull(),
+            ])
+            ->columnSpanFull(),
+        ])->columns(2); 
     }
 
     public static function table(Table $table): Table

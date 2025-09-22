@@ -61,23 +61,6 @@ class BerkasResource extends Resource
     {
         return $form
             ->schema([
-                TextInput::make('customer_name')
-                    ->label('Customer Name')
-                    ->placeholder('mis. Suzuki')
-                    ->datalist(['Suzuki', 'Yamaha', 'FCC Indonesia', 'Astemo', 'IMC Tekno Id    ']) 
-                    ->maxLength(100)
-                    ->required(),
-
-                TextInput::make('model')
-                    ->label('Model')
-                    ->placeholder('mis. YTB')
-                    ->datalist(['YTB'])
-                    ->maxLength(100),
-
-                TextInput::make('kode_berkas')
-                    ->label('Part No')
-                    ->required(),
-
                 FileUpload::make('thumbnail')
                     ->label('Gambar')
                     ->image()
@@ -99,6 +82,23 @@ class BerkasResource extends Resource
                     ->preserveFilenames()
                     ->maxSize(10240)
                     ->nullable(),
+                    
+                TextInput::make('customer_name')
+                    ->label('Customer Name')
+                    ->placeholder('mis. Suzuki')
+                    ->datalist(['Suzuki', 'Yamaha', 'FCC Indonesia', 'Astemo', 'IMC Tekno Id    ']) 
+                    ->maxLength(100)
+                    ->required(),
+
+                TextInput::make('model')
+                    ->label('Model')
+                    ->placeholder('mis. YTB')
+                    ->datalist(['YTB'])
+                    ->maxLength(100),
+
+                TextInput::make('kode_berkas')
+                    ->label('Part No')
+                    ->required(),
 
                 TextInput::make('nama')
                     ->label('Part Name')
@@ -124,9 +124,7 @@ class BerkasResource extends Resource
                     ->previewable(true)
                     ->downloadable(false) // JANGAN generate URL publik
                     ->openable(false)     // JANGAN open via Storage::url
-                    ->getUploadedFileNameForStorageUsing(fn ($file) =>
-                        now()->format('Ymd_His') . '-' . Str::random(6) . '-' . $file->getClientOriginalName()
-                    )
+                    ->preserveFilenames()
                     ->required(fn (string $context) => $context === 'create')
                     ->hintAction(
                         FormAction::make('openFile')
@@ -153,9 +151,7 @@ class BerkasResource extends Resource
                     ->previewable(true)
                     ->downloadable(false)             // jangan expose URL publik
                     ->openable(false)
-                    ->getUploadedFileNameForStorageUsing(fn ($file) =>
-                        now()->format('Ymd_His') . '-' . Str::random(6) . '-' . $file->getClientOriginalName()
-                    )
+                    ->preserveFilenames()
                     ->visible(fn () => auth()->user()?->hasRole('Admin') ?? false),
 
 
@@ -163,7 +159,7 @@ class BerkasResource extends Resource
                 // Lampiran (disarankan kelola via tabel/aksi)
                 // =========================
                 \Filament\Forms\Components\Section::make('Lampiran')
-                    ->description('Kelola lampiran melalui tombol "Lampiran" / "Tambah Lampiran" di tabel.'),
+                    ->description('Kelola lampiran melalui tombol "Tambah Lampiran" di panel tabel.'),
                 Section::make('Riwayat dokumen')
                     ->visible(fn (string $context) => $context === 'view') // hanya muncul di modal View
                     ->schema([
@@ -242,16 +238,23 @@ class BerkasResource extends Resource
                     Filter::make('q')
                         ->label('Cari')
                         ->form([
-                            // === TAGS INPUT: tambah keyword satu per satu jadi chip ===
                             TagsInput::make('terms')
                                 ->label('Kata kunci')
                                 ->placeholder('Ketik lalu Enter untuk menambah')
+                                ->separator(',')
                                 ->reorderable()
-                                ->separator(',') // opsional: bisa paste "a, b, c"
-                                ->suggestions([]), // tidak ada default suggestion
+                                ->live(debounce: 0)               // kirim langsung
+                                ->afterStateUpdated(fn ($state, $component) =>
+                                    $component->getLivewire()->resetTablePage() // juga memicu rerender
+                                ),
+
                             Toggle::make('all')
                                 ->label('Cocokkan semua keyword (mode ALL)')
-                                ->inline(false),
+                                ->inline(false)
+                                ->live()                           // toggle langsung jalan
+                                ->afterStateUpdated(fn ($state, $component) =>
+                                    $component->getLivewire()->resetTablePage()
+                                ),
                         ])
                         ->query(function (Builder $query, array $data): void {
                             $terms = collect($data['terms'] ?? [])
@@ -333,6 +336,7 @@ class BerkasResource extends Resource
                     ViewAction::make()
                         ->label('')
                         ->icon('heroicon-m-eye')
+                        ->modalWidth('7xl')
                         ->tooltip('Lihat'),
 
                     // Edit/Delete: hanya Admin/Editor – gunakan nullsafe (?? false)

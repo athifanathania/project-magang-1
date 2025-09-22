@@ -19,7 +19,7 @@ trait FileCell
     protected static function fileTextColumn(string $field, \Closure $urlResolver): TextColumn
     {
         return TextColumn::make($field)
-            ->state(fn ($record) => data_get($record, $field) ? '📂' : '—')
+            ->state(fn ($record) => data_get($record, $field) ? '📂' : '-')
             ->url(
                 fn ($record) =>
                     (data_get($record, $field) && static::canOpenFile())

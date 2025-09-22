@@ -9,10 +9,12 @@ use Filament\Actions;
 use Filament\Notifications\Notification;      // + tambah
 use Filament\Resources\Pages\ListRecords;
 use Livewire\Attributes\On;              
+use App\Livewire\Concerns\HandlesImmDocVersions;
 
 class ListBerkas extends ListRecords
 {
     protected static string $resource = BerkasResource::class;
+    use HandlesImmDocVersions;
 
     /** dipakai untuk auto-buka modal setelah create lampiran */
     protected ?int $openLampiranForId = null;

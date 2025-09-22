@@ -159,9 +159,6 @@ class ImmLampiranResource extends Resource
                 ->previewable(true)
                 ->downloadable(false)
                 ->openable(false)
-                ->getUploadedFileNameForStorageUsing(fn ($file) =>
-                    now()->format('Ymd_His') . '-' . Str::random(6) . '-' . $file->getClientOriginalName()
-                )
                 ->visible(fn () => auth()->user()?->hasRole('Admin') ?? false)
                 ->helperText('Hanya Admin yang dapat mengganti file asli'),
         ])->columns(2),

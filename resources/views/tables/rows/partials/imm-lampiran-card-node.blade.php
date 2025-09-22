@@ -3,6 +3,7 @@
 @php
 use Filament\Facades\Filament;
 use App\Models\ImmLampiran;
+use Illuminate\Support\Facades\Gate;
 
 // children
 $childrenAll = $lampiran->relationLoaded('childrenRecursive')
@@ -126,6 +127,23 @@ $canManageImm = ! $isPublic && (
     || auth()->user()?->can('lampiran.create')
     || auth()->user()?->can('create', \App\Models\ImmLampiran::class)
 );
+
+$roleCanDownload = Gate::allows('download-source');      // Admin/Editor/Staff = true; Viewer = false
+$fileSrcPath     = trim((string) ($lampiran->file_src ?? ''));
+$hasFileSrc      = ($fileSrcPath !== '');
+
+// (opsional legacy) anggap file non-PDF di kolom `file` sebagai “asli”
+$ext            = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+$nonPdfInFile   = $hasFile && $ext !== 'pdf';
+
+// aktif kalau user berhak & (ada file_src ATAU file non-PDF lama)
+$canDownloadActive = $roleCanDownload && ($hasFileSrc || $nonPdfInFile);
+
+// alasan tooltip kalau ikon di-disable
+$dlDisabledReason = $roleCanDownload ? 'File asli belum diunggah' : 'Khusus Admin/Editor/Staff';
+
+// URL route unduh (controller-mu)
+$downloadSrcUrl = route('download.source', ['type' => 'imm-lampiran', 'id' => $lampiran->id]);
 @endphp
 
 @once
@@ -164,14 +182,33 @@ $canManageImm = ! $isPublic && (
         @endif
 
         <div class="ml-auto flex items-center gap-2">
-          @if ($hasFile)
-            <a href="{{ $openUrl }}" target="_blank" rel="noopener" class="text-sm font-medium hover:underline" style="color:#2563eb" @click.stop>Buka</a>
-          @elseif ($canUpdate)
-            <a href="{{ $editUrl }}?missingFile=1" class="text-sm font-medium hover:underline text-amber-700" @click.stop>Tambahkan file</a>
+        @if ($hasFile)
+          <a href="{{ $openUrl }}" target="_blank" rel="noopener"
+            class="text-sm font-medium hover:underline" style="color:#2563eb"
+            @click.stop>Buka</a>
+        @elseif ($canUpdate)
+          <a href="{{ $editUrl }}?missingFile=1"
+            class="text-sm font-medium hover:underline text-amber-700"
+            @click.stop>Tambahkan file</a>
+        @else
+          <span class="text-sm text-gray-500">File belum tersedia</span>
+        @endif
+
+        {{-- ⬇️ Ikon Unduh File Asli (hanya Admin/Editor/Staff). Viewer: tidak tampil sama sekali --}}
+        @if ($roleCanDownload)
+          @if ($canDownloadActive)
+            <a href="{{ $downloadSrcUrl }}" target="_blank" rel="noopener"
+              class="text-gray-600 hover:text-gray-900" title="Unduh file asli"
+              @click.stop>
+              <x-filament::icon icon="heroicon-m-arrow-down-tray" class="w-4 h-4" />
+            </a>
           @else
-            <span class="text-sm text-gray-500">File belum tersedia</span>
+            <span class="text-gray-300 cursor-not-allowed" title="{{ $dlDisabledReason }}">
+              <x-filament::icon icon="heroicon-m-arrow-down-tray" class="w-4 h-4" />
+            </span>
           @endif
-        </div>
+        @endif
+      </div>
 
         @if (auth()->user()?->can('update', $lampiran) || $canManageImm)
         <a href="{{ $editUrl }}" class="ml-2 text-gray-400 hover:text-blue-600 shrink-0" title="Edit lampiran" @click.stop>

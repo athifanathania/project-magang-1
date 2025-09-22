@@ -204,5 +204,20 @@ class Lampiran extends Model
         return true;
     }
 
+    public function addPdfVersion(array $ver): void
+    {
+        $list = collect($this->file_versions ?? []);
+        $list->prepend($ver); // versi terbaru di depan
+        $this->file_versions = $list->values()->all();
+        $this->saveQuietly();
+    }
+
+    public function addSourceVersion(array $ver): void
+    {
+        $list = collect($this->file_src_versions ?? []);
+        $list->prepend($ver);
+        $this->file_src_versions = $list->values()->all();
+        $this->saveQuietly();
+    }
 
 }

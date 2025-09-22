@@ -39,5 +39,5 @@
     @endforeach
   </div>
 @else
-  <span class="text-gray-400">—</span>
+  <span class="text-gray-400">-</span>
 @endif

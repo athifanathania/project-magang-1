@@ -84,9 +84,6 @@ class ImmManualMutuResource extends Resource
                     ->previewable(true)
                     ->downloadable(false)
                     ->openable(false)
-                    ->getUploadedFileNameForStorageUsing(fn ($file) =>
-                        now()->format('Ymd_His').'-'.\Illuminate\Support\Str::random(6).'-'.$file->getClientOriginalName()
-                    )
                     ->visible(fn () => auth()->user()?->hasRole('Admin') ?? false)
                     ->helperText('Hanya Admin yang dapat mengganti file asli'),
             ])->columns(2),
@@ -150,7 +147,7 @@ class ImmManualMutuResource extends Resource
 
                 Tables\Columns\TextColumn::make('file')
                     ->label('File')
-                    ->formatStateUsing(fn ($state) => $state ? '📂' : '—')
+                    ->formatStateUsing(fn ($state) => $state ? '📂' : '-')
                     ->url(fn ($record) =>
                         ($record->file && (auth()->user()?->hasAnyRole(['Admin','Editor','Staff']) ?? false))
                             ? route('media.imm.file', ['type' => 'manual-mutu', 'id' => $record->getKey()])
