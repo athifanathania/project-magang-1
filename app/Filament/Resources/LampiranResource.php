@@ -260,10 +260,11 @@ class LampiranResource extends Resource
                     ->label('')
                     ->icon('heroicon-m-eye')
                     ->tooltip('Lihat')
-                    ->url(fn () => null)                 // <- paksa modal, jangan ke page /view
+                    ->inModal() 
                     ->modalHeading('Lihat Lampiran')
                     ->modalSubmitAction(false)
-                    ->modalCancelActionLabel('Tutup'),
+                    ->modalCancelActionLabel('Tutup')
+                    ->modalWidth('7xl'),
 
                 Tables\Actions\EditAction::make()
                     ->visible(fn()=>auth()->user()->can('lampiran.update')),

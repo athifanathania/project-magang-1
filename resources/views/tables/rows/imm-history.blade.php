@@ -116,6 +116,8 @@
               }
               $sizeText = $sizeBytes ? $fmtSize($sizeBytes) : '-';
 
+              $isActive = empty($v['replaced_at']);
+
               // REVxx (hindari REV00)
               $revRaw = (string)($v['revision'] ?? '');
               $revNum = preg_match('/\d+/', $revRaw, $m) ? max(1, (int)$m[0]) : ($originalIndex + 1);
@@ -167,7 +169,9 @@
                       ">
                       <x-filament::icon icon="heroicon-m-pencil" class="w-4 h-4 text-gray-600"/>
                     </button>
+                  @endif
 
+                  @if ($canDelete && ! $isActive)
                     <button type="button" class="inline-flex items-center justify-center w-7 h-7 rounded-md hover:bg-gray-100"
                       title="Hapus versi"
                       @click.stop.prevent="

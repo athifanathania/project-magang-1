@@ -155,50 +155,132 @@ class Lampiran extends Model
         $disk = \Storage::disk('private');
         if (!$disk->exists($oldPath)) return;
 
-        // waktu upload awal: dari mtime file lama
-        $uploadedAt = null;
-        try {
-            $ts = $disk->lastModified($oldPath);
-            if (is_numeric($ts)) {
-                $uploadedAt = \Illuminate\Support\Carbon::createFromTimestamp($ts)->toDateTimeString();
-            }
-        } catch (\Throwable $e) {
-            // biarkan null jika gagal
-        }
-
+        // 1) Pindahkan file fisik ke folder _versions/{id}/...
         $newPath = 'lampiran/_versions/'.$this->id.'/'.now()->format('Ymd_His').'-'.basename($oldPath);
         $disk->makeDirectory(dirname($newPath));
         $disk->move($oldPath, $newPath);
 
-        $versions = $this->file_versions ?? [];
+        // 2) Normalisasi raw -> pisahkan versi numerik & meta
+        $raw = $this->getAttribute('file_versions');
+        if ($raw instanceof \Illuminate\Support\Collection) $raw = $raw->all();
+        elseif (is_string($raw)) { $dec = json_decode($raw, true); $raw = is_array($dec) ? $dec : []; }
+        elseif (!is_array($raw)) { $raw = []; }
+
+        $versions = [];
+        $meta     = [];
+        foreach ($raw as $k => $v) {
+            $isNumeric = is_int($k) || ctype_digit((string)$k);
+            if ($isNumeric) {
+                if (is_array($v) && (isset($v['file_path']) || isset($v['path']) || isset($v['filename']))) {
+                    $versions[] = $v; // rebase 0..n-1
+                }
+            } else {
+                $meta[$k] = $v;
+            }
+        }
+
+        // 3) Ambil deskripsi VERSI AKTIF dari meta, lalu kosongkan
+        $currentDesc = trim((string)($meta['__current_desc'] ?? ''));
+        unset($meta['__current_desc']);
+
+        // 4) Tambah entry versi (untuk file lama yang baru dipindah)
+        $uploadedAt = null;
+        try { $ts = $disk->lastModified($newPath); $uploadedAt = \Illuminate\Support\Carbon::createFromTimestamp($ts)->toDateTimeString(); }
+        catch (\Throwable) {}
+
         $versions[] = [
             'path'        => $newPath,
             'filename'    => basename($oldPath),
             'size'        => $disk->size($newPath),
             'ext'         => pathinfo($newPath, PATHINFO_EXTENSION),
-            'uploaded_at' => $uploadedAt ?? now()->toDateTimeString(), // fallback now()
+            'uploaded_at' => $uploadedAt ?? optional($this->updated_at ?? $this->created_at)->toDateTimeString(),
             'replaced_at' => now()->toDateTimeString(),
             'by'          => $userId,
+            'description' => $currentDesc !== '' ? $currentDesc : null,
         ];
-        $this->file_versions = $versions;
+
+        // 5) Satukan kembali
+        $out = $versions;
+        foreach ($meta as $k => $v) { $out[$k] = $v; }
+
+        $this->file_versions = $out;
     }
 
     public function deleteVersionAtIndex(int $index): bool
     {
-        $versions = $this->file_versions ?? [];
-        if (! array_key_exists($index, $versions)) {
+        // Normalisasi raw
+        $raw = $this->getAttribute('file_versions');
+        if ($raw instanceof \Illuminate\Support\Collection) $raw = $raw->all();
+        elseif (is_string($raw)) { $dec = json_decode($raw, true); $raw = is_array($dec) ? $dec : []; }
+        elseif (!is_array($raw)) { $raw = []; }
+
+        $versions = [];
+        $meta     = [];
+        foreach ($raw as $k => $v) {
+            $isNumeric = is_int($k) || ctype_digit((string)$k);
+            if ($isNumeric) {
+                if (is_array($v) && (isset($v['file_path']) || isset($v['path']) || isset($v['filename']))) {
+                    $versions[] = $v;
+                }
+            } else {
+                $meta[$k] = $v;
+            }
+        }
+
+        if ($index < 0 || $index >= count($versions)) return false;
+
+        $disk = \Storage::disk('private');
+        $v    = $versions[$index] ?? null;
+        if (is_array($v) && !empty($v['path']) && $disk->exists($v['path'])) {
+            $disk->delete($v['path']);
+        }
+        array_splice($versions, $index, 1);
+
+        $out = array_values($versions);
+        foreach ($meta as $k => $val) { $out[$k] = $val; }
+
+        $this->file_versions = $out;
+        $this->saveQuietly();
+
+        return true;
+    }
+
+    public function updateVersionDescription(int $index, string $description): bool
+    {
+        $desc = trim($description);
+
+        $raw = $this->getAttribute('file_versions');
+        if ($raw instanceof \Illuminate\Support\Collection) $raw = $raw->all();
+        elseif (is_string($raw)) { $dec = json_decode($raw, true); $raw = is_array($dec) ? $dec : []; }
+        elseif (!is_array($raw)) { $raw = []; }
+
+        $versions = [];
+        $meta     = [];
+        foreach ($raw as $k => $v) {
+            $isNumeric = is_int($k) || ctype_digit((string)$k);
+            if ($isNumeric) {
+                if (is_array($v) && (isset($v['file_path']) || isset($v['path']) || isset($v['filename']))) {
+                    $versions[] = $v;
+                }
+            } else {
+                $meta[$k] = $v;
+            }
+        }
+
+        $activeIndex = count($versions); // index “baris aktif” pada blade
+
+        if ($index < $activeIndex) {
+            $versions[$index]['description'] = $desc;
+        } elseif ($index === $activeIndex) {
+            $meta['__current_desc'] = $desc;
+        } else {
             return false;
         }
 
-        $disk = \Storage::disk('private');
+        $out = $versions;
+        foreach ($meta as $k => $v) { $out[$k] = $v; }
 
-        $v = $versions[$index];
-        if (!empty($v['path']) && $disk->exists($v['path'])) {
-            $disk->delete($v['path']);
-        }
-
-        array_splice($versions, $index, 1);
-        $this->file_versions = array_values($versions);
+        $this->file_versions = $out;
         $this->saveQuietly();
 
         return true;

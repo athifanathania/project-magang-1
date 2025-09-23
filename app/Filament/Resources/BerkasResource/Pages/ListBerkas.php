@@ -4,9 +4,9 @@ namespace App\Filament\Resources\BerkasResource\Pages;
 
 use App\Filament\Resources\BerkasResource;
 use App\Models\Berkas;
-use App\Models\Lampiran;                      // + tambah
+use App\Models\Lampiran;                      
 use Filament\Actions;
-use Filament\Notifications\Notification;      // + tambah
+use Filament\Notifications\Notification;      
 use Filament\Resources\Pages\ListRecords;
 use Livewire\Attributes\On;              
 use App\Livewire\Concerns\HandlesImmDocVersions;
@@ -98,5 +98,86 @@ class ListBerkas extends ListRecords
     protected function getHeaderActions(): array
     {
         return [ Actions\CreateAction::make() ];
+    }
+
+    /** Dipanggil dari Blade: window.Livewire.find(pageId).call('onDocDeleteVersion', payload) */
+    public function onDocDeleteVersion(array $payload): void
+    {
+        $type  = (string)($payload['type'] ?? 'berkas');
+        $id    = (int)   ($payload['id']   ?? 0);
+        $index = (int)   ($payload['index']?? -1);
+        $path  = (string)($payload['path'] ?? '');
+
+        try {
+            if ($type !== 'berkas') {
+                throw new \RuntimeException('Tipe tidak dikenali.');
+            }
+
+            $berkas = Berkas::findOrFail($id);
+
+            // Prioritas: tembak index berdasarkan path dari Blade (dukung legacy `path`)
+            if ($path !== '') {
+                $idxByPath = $berkas->versionsList()->search(
+                    fn ($v) => (string)($v['file_path'] ?? $v['path'] ?? '') === (string)$path
+                );
+                if ($idxByPath !== false) {
+                    $index = (int) $idxByPath;
+                }
+            }
+
+            $ok = $berkas->deleteVersionAtIndex($index);
+
+            if ($ok) {
+                Notification::make()->title('Versi dihapus')->success()->send();
+            } else {
+                Notification::make()->title('Gagal menghapus versi')->danger()->send();
+            }
+
+            // refresh UI
+            $this->dispatch('$refresh');
+
+        } catch (\Throwable $e) {
+            Notification::make()
+                ->title('Gagal menghapus versi')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
+    #[On('lampiran-update-version-desc')]
+    public function onLampiranUpdateVersionDesc(array $payload): void
+    {
+        $id   = (int)($payload['id'] ?? $payload['lampiranId'] ?? 0);
+        $idx  = (int)($payload['index'] ?? -1);
+        $desc = (string)($payload['description'] ?? '');
+
+        try {
+            if ($id <= 0 || $idx < 0) {
+                \Filament\Notifications\Notification::make()->title('Payload tidak valid')->danger()->send();
+                return;
+            }
+
+            $m = \App\Models\Lampiran::find($id);
+            if (! $m) {
+                \Filament\Notifications\Notification::make()->title('Lampiran tidak ditemukan')->danger()->send();
+                return;
+            }
+
+            $ok = $m->updateVersionDescription($idx, $desc);
+
+            \Filament\Notifications\Notification::make()
+                ->title($ok ? 'Deskripsi revisi diperbarui' : 'Versi tidak ditemukan')
+                ->{$ok ? 'success' : 'danger'}()
+                ->send();
+
+            $this->dispatch('$refresh');
+        } catch (\Throwable $e) {
+            \Filament\Notifications\Notification::make()
+                ->title('Gagal menyimpan')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
     }
 }

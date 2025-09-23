@@ -302,7 +302,7 @@ $canCreateLampiran = $user?->can('lampiran.create') ?? false;
         </x-slot>
     </x-filament::modal>
     <!-- 🔹 Modal VIEW lampiran -->
-    <x-filament::modal id="view-lampiran-panel-{{ $record->id }}" width="5xl" wire:ignore.self>
+    <x-filament::modal id="view-lampiran-panel-{{ $record->id }}" width="7xl" wire:ignore.self>
         <x-slot name="heading">Lihat Lampiran</x-slot>
 
         {{-- viewer selalu ada; dia akan memuat data saat terima event --}}

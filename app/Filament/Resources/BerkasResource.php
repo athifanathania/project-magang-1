@@ -83,12 +83,12 @@ class BerkasResource extends Resource
                     ->maxSize(10240)
                     ->nullable(),
                     
-                TextInput::make('customer_name')
+                TextInput::make('cust_name')
                     ->label('Customer Name')
                     ->placeholder('mis. Suzuki')
-                    ->datalist(['Suzuki', 'Yamaha', 'FCC Indonesia', 'Astemo', 'IMC Tekno Id    ']) 
+                    ->datalist(['Suzuki','Yamaha','FCC Indonesia','Astemo','IMC Tekno Id'])
                     ->maxLength(100)
-                    ->required(),
+                    ->required(fn (string $context) => $context === 'create'),
 
                 TextInput::make('model')
                     ->label('Model')
@@ -122,16 +122,23 @@ class BerkasResource extends Resource
                     ->preserveFilenames()
                     ->rules(['file'])
                     ->previewable(true)
-                    ->downloadable(false) // JANGAN generate URL publik
-                    ->openable(false)     // JANGAN open via Storage::url
-                    ->preserveFilenames()
+                    ->downloadable(false)
+                    ->openable(false)
                     ->required(fn (string $context) => $context === 'create')
+                    ->saveUploadedFileUsing(function ($file, $record) {
+                        if ($record) {
+                            $ver = $record->addVersionFromUpload($file);
+                            return $ver['file_path'] ?? $record->dokumen;
+                        }
+                        return $file->store('berkas/tmp', 'private');
+                    })
+                    ->deleteUploadedFileUsing(fn () => null)
                     ->hintAction(
-                        FormAction::make('openFile')
+                        \Filament\Forms\Components\Actions\Action::make('openFile')
                             ->label('Buka file')
                             ->url(
                                 fn ($record) => ($record && $record->dokumen)
-                                    ? route('media.berkas', $record) // /media/berkas/{berkas}
+                                    ? route('media.berkas', $record)
                                     : null,
                                 shouldOpenInNewTab: true
                             )
@@ -139,8 +146,7 @@ class BerkasResource extends Resource
                                 filled($record?->dokumen)
                                 && (auth()->user()?->hasAnyRole(['Admin','Editor','Staff']) ?? false)
                             )
-                    )
-                    ->deleteUploadedFileUsing(fn () => null),
+                        ),
 
                 FileUpload::make('dokumen_src')
                     ->label('File Asli (Admin saja)')
@@ -175,7 +181,7 @@ class BerkasResource extends Resource
     {
         return static::applyRowClickPolicy($table)   
             ->columns([
-                TextColumn::make('customer_name')
+                TextColumn::make('cust_name')
                     ->label('Cust Name')
                     ->sortable()
                     ->limit(16)
@@ -241,20 +247,23 @@ class BerkasResource extends Resource
                             TagsInput::make('terms')
                                 ->label('Kata kunci')
                                 ->placeholder('Ketik lalu Enter untuk menambah')
-                                ->separator(',')
                                 ->reorderable()
-                                ->live(debounce: 0)               // kirim langsung
-                                ->afterStateUpdated(fn ($state, $component) =>
-                                    $component->getLivewire()->resetTablePage() // juga memicu rerender
-                                ),
+                                ->separator(',')
+                                ->live(debounce: 500)
+                                // >>> auto-apply tanpa klik Apply
+                                ->afterStateUpdated(function ($state, $set = null, $get = null, $refresh = null) {
+                                    // $refresh tersedia di Filament v3 → jalankan bila ada
+                                    if (is_callable($refresh)) $refresh();
+                                }),
 
                             Toggle::make('all')
                                 ->label('Cocokkan semua keyword (mode ALL)')
                                 ->inline(false)
-                                ->live()                           // toggle langsung jalan
-                                ->afterStateUpdated(fn ($state, $component) =>
-                                    $component->getLivewire()->resetTablePage()
-                                ),
+                                ->live()
+                                // >>> auto-apply saat toggle berubah
+                                ->afterStateUpdated(function ($state, $set = null, $get = null, $refresh = null) {
+                                    if (is_callable($refresh)) $refresh();
+                                }),
                         ])
                         ->query(function (Builder $query, array $data): void {
                             $terms = collect($data['terms'] ?? [])
@@ -266,40 +275,41 @@ class BerkasResource extends Resource
 
                             if (empty($terms)) return;
 
-                            $modeAll = (bool) ($data['all'] ?? false);
+                            $modeAll = filter_var($data['all'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
                             $buildOneTermClause = function (Builder $q2, string $term): void {
-                                $termLower = mb_strtolower($term);
-                                $likeLower = "%{$termLower}%";
+                                $like = '%' . mb_strtolower($term) . '%';
 
-                                // ====== BERKAS (kolom string biasa) ======
-                                $q2->whereRaw('LOWER(berkas.kode_berkas) LIKE ?', [$likeLower])
-                                ->orWhereRaw('LOWER(berkas.customer_name) LIKE ?', [$likeLower])
-                                ->orWhereRaw('LOWER(berkas.model)         LIKE ?', [$likeLower])
-                                ->orWhereRaw('LOWER(berkas.nama)        LIKE ?', [$likeLower])
-                                ->orWhereRaw('LOWER(berkas.detail)      LIKE ?', [$likeLower])
-                                ->orWhereRaw('LOWER(berkas.dokumen)     LIKE ?', [$likeLower])
+                                // Grupkan semua OR dalam satu kurung
+                                $q2->where(function (Builder $g) use ($like) {
+                                    $g->whereRaw('LOWER(berkas.kode_berkas) LIKE ?', [$like])
+                                    ->orWhereRaw('LOWER(berkas.cust_name) LIKE ?', [$like])
+                                    ->orWhereRaw('LOWER(berkas.model) LIKE ?', [$like])
+                                    ->orWhereRaw('LOWER(berkas.nama) LIKE ?', [$like])
+                                    ->orWhereRaw('LOWER(berkas.detail) LIKE ?', [$like])
+                                    ->orWhereRaw('LOWER(berkas.dokumen) LIKE ?', [$like])
+                                    ->orWhereRaw('LOWER(CAST(berkas.keywords AS CHAR)) LIKE ?', [$like]);
 
-                                // ====== BERKAS (JSON keywords → CAST ke CHAR) ======
-                                ->orWhereRaw('LOWER(CAST(berkas.keywords AS CHAR)) LIKE ?', [$likeLower])
-
-                                // ====== LAMPIRANS (relasi) ======
-                                ->orWhereHas('lampirans', function (Builder $l) use ($likeLower) {
-                                    $l->whereRaw('LOWER(lampirans.nama) LIKE ?', [$likeLower])
-                                        ->orWhereRaw('LOWER(lampirans.file) LIKE ?', [$likeLower])
-
-                                        // LAMPIRANS (JSON keywords → CAST ke CHAR)
-                                        ->orWhereRaw('LOWER(CAST(lampirans.keywords AS CHAR)) LIKE ?', [$likeLower]);
+                                    // Relasi dibungkus agar tetap di dalam kurung
+                                    $g->orWhere(function (Builder $q) use ($like) {
+                                        $q->whereHas('lampirans', function (Builder $l) use ($like) {
+                                            $l->where(function (Builder $lx) use ($like) {
+                                                $lx->whereRaw('LOWER(lampirans.nama) LIKE ?', [$like])
+                                                ->orWhereRaw('LOWER(lampirans.file) LIKE ?', [$like])
+                                                ->orWhereRaw('LOWER(CAST(lampirans.keywords AS CHAR)) LIKE ?', [$like]);
+                                            });
+                                        });
+                                    });
                                 });
                             };
 
-                            $query->where(function (Builder $outer) use ($terms, $modeAll, $buildOneTermClause): void {
+                            $query->where(function (Builder $outer) use ($terms, $modeAll, $buildOneTermClause) {
                                 if ($modeAll) {
                                     foreach ($terms as $term) {
                                         $outer->where(fn (Builder $sub) => $buildOneTermClause($sub, $term));
                                     }
                                 } else {
-                                    $outer->where(function (Builder $subOr) use ($terms, $buildOneTermClause): void {
+                                    $outer->where(function (Builder $subOr) use ($terms, $buildOneTermClause) {
                                         foreach ($terms as $term) {
                                             $subOr->orWhere(fn (Builder $sub) => $buildOneTermClause($sub, $term));
                                         }
@@ -307,12 +317,10 @@ class BerkasResource extends Resource
                                 }
                             });
                         })
-                        // tampilkan chips yang aktif di pill indikator filter
                         ->indicateUsing(function (array $data): ?string {
                             $terms = collect($data['terms'] ?? [])
                                 ->filter(fn ($t) => is_string($t) && trim($t) !== '')
-                                ->map(fn ($t) => trim($t))
-                                ->values();
+                                ->map(fn ($t) => trim($t));
 
                             return $terms->isNotEmpty()
                                 ? 'Cari: ' . $terms->implode(', ')

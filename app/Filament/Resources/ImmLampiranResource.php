@@ -159,6 +159,7 @@ class ImmLampiranResource extends Resource
                 ->previewable(true)
                 ->downloadable(false)
                 ->openable(false)
+                ->disabledOn('view')
                 ->visible(fn () => auth()->user()?->hasRole('Admin') ?? false)
                 ->helperText('Hanya Admin yang dapat mengganti file asli'),
         ])->columns(2),
