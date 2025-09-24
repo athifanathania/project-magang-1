@@ -40,10 +40,10 @@
     // tampilkan terbaru dulu
     $versions = $all->reverse()->values();
 
-    $canEdit     = auth()->user()?->hasAnyRole(['Admin','Editor']);
+    $canEdit     = auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false;
     $canDelete   = $canEdit;
-    $canDownload = $canEdit || (auth()->user()?->hasAnyRole(['Staff']) ?? false);
-    $showActions = $canEdit || $canDelete || $canDownload;
+    $canDownload = $canEdit;
+    $showActionsCol = $canEdit;
 
     $tz = auth()->user()->timezone ?? config('app.timezone') ?: 'Asia/Jakarta';
     $fmtDate = function ($d) use ($tz) {
@@ -94,7 +94,8 @@
   x-data="{
     toDeleteVersion: { lampiranId: null, index: null, name: '' },
     editVersion:     { lampiranId: null, index: null, name: '', description: '' },
-    pageId: '{{ $this->getId() }}',
+
+    pageId: '{{ method_exists($this, 'getLivewire') ? $this->getLivewire()->getId() : $this->getId() }}',
   }"
 >
   <div class="mt-4">
@@ -113,7 +114,7 @@
             <col class="w-20">
             <col class="w-20">
             <col class="w-20">
-            @if ($showActions)
+            @if ($showActionsCol)
               <col class="w-20">
             @endif
           </colgroup>
@@ -127,7 +128,7 @@
               <th class="px-3 py-2 border">Tgl Terbit</th>
               <th class="px-3 py-2 border">Tgl Ubah</th>
               <th class="px-3 py-2 border">Ukuran</th>
-              @if ($showActions)
+              @if ($showActionsCol)
               <th class="px-3 py-2 border">Aksi</th>
               @endif
             </tr>
@@ -176,7 +177,7 @@
               <td class="px-3 py-2 border">{{ $fmtDate($v['replaced_at'] ?? null) }}</td>
               <td class="px-3 py-2 border whitespace-nowrap">{{ $sizeText }}</td>
 
-              @if ($showActions)
+              @if ($showActionsCol)
               <td class="px-3 py-2 border text-center align-middle">
                 <div class="inline-flex items-center justify-center gap-1">
                   @if ($canDownload)
@@ -230,9 +231,11 @@
   <x-filament::modal id="confirm-delete-lampiran-version-{{ $rec->getKey() }}" width="md" wire:ignore.self>
     <x-slot name="heading">Hapus versi lampiran?</x-slot>
     <x-slot name="description">
-      <p class="text-sm text-gray-600">
-        Versi <b class="font-semibold text-gray-900 break-all" x-text="toDeleteVersion.name"></b> akan dihapus.
-        Tindakan tidak dapat dibatalkan.
+      <p class="text-sm text-gray-600 whitespace-normal break-words">
+        Versi
+        <b class="font-semibold text-gray-900 inline-block max-w-full break-all [overflow-wrap:anywhere] [word-break:break-word]"
+           x-text="toDeleteVersion.name"></b>
+        akan dihapus. Tindakan tidak dapat dibatalkan.
       </p>
     </x-slot>
     <x-slot name="footer">
@@ -240,12 +243,14 @@
         x-on:click="$dispatch('close-modal', { id: 'confirm-delete-lampiran-version-{{ $rec->getKey() }}' })">
         Batal
       </x-filament::button>
-      <x-filament::button color="danger"
+
+      <x-filament::button type="button" color="danger"
         x-on:click.stop.prevent="
           $dispatch('close-modal', { id: 'confirm-delete-lampiran-version-{{ $rec->getKey() }}' });
-          window.Livewire.dispatch('delete-lampiran-version', {
+          const comp = window.Livewire.find(pageId);
+          if (comp) comp.call('onDeleteLampiranVersion', {
             lampiranId: Number(toDeleteVersion.lampiranId ?? 0),
-            index: Number(toDeleteVersion.index ?? -1)
+            index:      Number(toDeleteVersion.index ?? -1)
           });
         ">
         Hapus
@@ -258,13 +263,16 @@
   <x-filament::modal id="edit-lampiran-version-{{ $rec->getKey() }}" width="2xl" wire:ignore.self>
     <x-slot name="heading">Edit deskripsi revisi</x-slot>
     <x-slot name="description">
-      <div class="text-sm text-gray-600">
+      <div class="text-sm text-gray-600 whitespace-normal break-words">
         Ubah deskripsi untuk file
-        <b class="font-semibold text-gray-900 break-all" x-text="editVersion.name"></b>
+        <b class="font-semibold text-gray-900 inline-block max-w-full break-all [overflow-wrap:anywhere] [word-break:break-word]"
+           x-text="editVersion.name"></b>
       </div>
       <div class="mt-3">
         <label class="block text-sm font-medium text-gray-700 mb-1">Deskripsi Revisi</label>
-        <textarea x-model="editVersion.description" rows="4"
+        <textarea
+          x-model="editVersion.description"
+          rows="4"
           class="fi-input block w-full rounded-lg border-gray-300 text-sm"
           placeholder="Tulis deskripsi perubahan..."></textarea>
       </div>
@@ -274,14 +282,15 @@
         x-on:click="$dispatch('close-modal', { id: 'edit-lampiran-version-{{ $rec->getKey() }}' })">
         Batal
       </x-filament::button>
+
       <x-filament::button color="primary"
         x-on:click.stop.prevent="
-          const payload = {
-            id: Number(editVersion.lampiranId ?? 0),
-            index: Number(editVersion.index ?? -1),
+          const comp = window.Livewire.find(pageId);
+          if (comp) comp.call('onLampiranUpdateVersionDesc', {
+            lampiranId:  Number(editVersion.lampiranId ?? 0),
+            index:       Number(editVersion.index ?? -1),
             description: String(editVersion.description ?? '')
-          };
-          window.Livewire.dispatch('lampiran-update-version-desc', payload);
+          });
           $dispatch('close-modal', { id: 'edit-lampiran-version-{{ $rec->getKey() }}' });
         ">
         Simpan

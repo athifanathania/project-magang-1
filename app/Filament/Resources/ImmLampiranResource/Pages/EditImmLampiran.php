@@ -30,6 +30,7 @@ class EditImmLampiran extends EditRecord
             \App\Models\ImmProsedur::class         => \App\Filament\Resources\ImmProsedurResource::class,
             \App\Models\ImmInstruksiStandar::class => \App\Filament\Resources\ImmInstruksiStandarResource::class,
             \App\Models\ImmFormulir::class         => \App\Filament\Resources\ImmFormulirResource::class,
+            \App\Models\ImmAuditInternal::class    => \App\Filament\Resources\ImmAuditInternalResource::class,
             default => null,
         };
     }

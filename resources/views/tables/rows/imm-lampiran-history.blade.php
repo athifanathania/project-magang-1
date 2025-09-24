@@ -42,10 +42,10 @@
     // tampilkan terbaru dulu
     $versions = $all->reverse()->values();
 
-    $canEdit     = auth()->user()?->hasAnyRole(['Admin','Editor']);
+    $canEdit     = auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false;
     $canDelete   = $canEdit;
-    $canDownload = auth()->user()?->hasAnyRole(['Admin','Editor','Staff']);
-    $showActions = $canEdit || $canDelete || $canDownload;
+    $canDownload = $canEdit;             
+    $showActionsCol = $canEdit;
 
     $tz = auth()->user()->timezone ?? config('app.timezone');
     if (blank($tz) || strtoupper($tz) === 'UTC') $tz = 'Asia/Jakarta';
@@ -121,7 +121,7 @@
           <col class="w-20">             {{-- Tgl Terbit --}}
           <col class="w-20">             {{-- Tgl Ubah --}}
           <col class="w-20">             {{-- Ukuran --}}
-          @if ($showActions)
+          @if ($showActionsCol)
             <col class="w-20">           {{-- Aksi --}}
           @endif
         </colgroup>
@@ -135,7 +135,7 @@
             <th class="px-3 py-2 border">Tgl Terbit</th>
             <th class="px-3 py-2 border">Tgl Ubah</th>
             <th class="px-3 py-2 border">Ukuran</th>
-            @if ($showActions)
+            @if ($showActionsCol)
             <th class="px-3 py-2 border">Aksi</th>
             @endif
           </tr>
@@ -190,7 +190,7 @@
               <td class="px-3 py-2 border">{{ $fmtDate($v['replaced_at'] ?? null) }}</td>
               <td class="px-3 py-2 border whitespace-nowrap">{{ $sizeText }}</td>
 
-              @if ($showActions)
+              @if ($showActionsCol)
               <td class="px-3 py-2 border text-center align-middle">
                 <div class="inline-flex items-center justify-center gap-1">
                   {{-- Download / Edit / Hapus hanya untuk VERSI NON-AKTIF --}}
@@ -243,11 +243,13 @@
     <x-slot name="heading">Hapus versi lampiran?</x-slot>
 
     <x-slot name="description">
-      <p class="text-sm text-gray-600 break-words">
-        Versi <b class="font-semibold text-gray-900 break-all" x-text="toDeleteVersion.name"></b> akan dihapus.<br>
-        Tindakan ini tidak dapat dibatalkan.
-      </p>
-    </x-slot>
+    <p class="text-sm text-gray-600 whitespace-normal break-words">
+      Versi
+      <b class="font-semibold text-gray-900 inline-block max-w-full break-all [overflow-wrap:anywhere] [word-break:break-word]"
+        x-text="toDeleteVersion.name"></b>
+      akan dihapus. Tindakan ini tidak dapat dibatalkan.
+    </p>
+  </x-slot>
 
     <x-slot name="footer">
       <x-filament::button color="gray"
@@ -273,9 +275,10 @@
     <x-slot name="heading">Edit deskripsi revisi</x-slot>
 
     <x-slot name="description">
-      <div class="text-sm text-gray-600">
+      <div class="text-sm text-gray-600 whitespace-normal break-words">
         Ubah deskripsi untuk file
-        <b class="font-semibold text-gray-900 break-all" x-text="editVersion.name"></b>
+        <b class="font-semibold text-gray-900 inline-block max-w-full break-all [overflow-wrap:anywhere] [word-break:break-word]"
+          x-text="editVersion.name"></b>
       </div>
       <div class="mt-3">
         <label class="block text-sm font-medium text-gray-700 mb-1">Deskripsi Revisi</label>
@@ -306,7 +309,6 @@
         ">
         Simpan
       </x-filament::button>
-
     </x-slot>
   </x-filament::modal>
 </div>

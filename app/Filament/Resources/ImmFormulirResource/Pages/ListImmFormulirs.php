@@ -22,7 +22,7 @@ class ListImmFormulirs extends ListRecords
     {
         return [
             Actions\CreateAction::make()
-                ->label('New Dokumen')
+                ->label('Tambah Formulir')
                 ->visible(fn () => auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false),
         ];
     }

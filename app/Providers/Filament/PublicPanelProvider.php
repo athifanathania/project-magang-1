@@ -22,33 +22,26 @@ class PublicPanelProvider extends PanelProvider
     {
         return $panel
             ->id('public')
-            ->path('') // "/"
+            ->path('')
             ->brandName(config('app.name'))
-            ->colors(['primary' => Color::Blue])
-
-            // Dashboard & resource
-            ->pages([ \Filament\Pages\Dashboard::class ])
+            ->colors(['primary' => \Filament\Support\Colors\Color::Blue])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
 
-            // tombol login di sidebar public
-            ->navigationItems([
-                \Filament\Navigation\NavigationItem::make('Masuk Admin/Editor')
-                    ->icon('heroicon-m-arrow-right-on-rectangle')
-                    ->url('/admin/login')
-                    ->sort(9999),
-            ])
+            // ⬇️ tambahkan ini
+            ->renderHook('panels::sidebar.nav.end', fn (): string => view('filament/public/sidebar-login')->render())
 
             ->middleware([
-                EncryptCookies::class,
-                AddQueuedCookiesToResponse::class,
-                StartSession::class,
-                ShareErrorsFromSession::class,
-                VerifyCsrfToken::class,
-                SubstituteBindings::class,
-                DisableBladeIconComponents::class,
-                DispatchServingFilamentEvent::class,
+                \Illuminate\Cookie\Middleware\EncryptCookies::class,
+                \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
+                \Illuminate\Session\Middleware\StartSession::class,
+                \Illuminate\View\Middleware\ShareErrorsFromSession::class,
+                \Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class,
+                \Illuminate\Routing\Middleware\SubstituteBindings::class,
+                \Filament\Http\Middleware\DisableBladeIconComponents::class,
+                \Filament\Http\Middleware\DispatchServingFilamentEvent::class,
             ]);
     }
+
 }

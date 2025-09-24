@@ -17,8 +17,8 @@
 
     $canEdit     = auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false;
     $canDelete   = $canEdit;
-    $canDownload = $canEdit || (auth()->user()?->hasAnyRole(['Staff']) ?? false);
-    $showActions = $canEdit || $canDelete || $canDownload;
+    $canDownload = $canEdit;              
+    $showActionsCol = $canEdit;
 
     $tz = auth()->user()->timezone ?? config('app.timezone') ?: 'Asia/Jakarta';
     $fmtDate = function ($d) use ($tz) {
@@ -82,7 +82,7 @@
           <col class="w-24">
           <col class="w-24">
           <col class="w-20">
-          @if($showActions)
+          @if($showActionsCol)
           <col class="w-10">
           @endif
         </colgroup>
@@ -96,7 +96,7 @@
             <th class="px-3 py-2 border">Tgl Terbit</th>
             <th class="px-3 py-2 border">Tgl Ubah</th>
             <th class="px-3 py-2 border">Ukuran</th>
-            @if ($showActions) <th class="px-3 py-2 border text-center">Aksi</th> @endif
+            @if ($showActionsCol) <th class="px-3 py-2 border text-center">Aksi</th> @endif
           </tr>
         </thead>
 
@@ -145,7 +145,7 @@
               <td class="px-3 py-2 border">{{ $fmtDate($v['replaced_at'] ?? null) }}</td>
               <td class="px-3 py-2 border whitespace-nowrap">{{ $sizeText }}</td>
 
-              @if ($showActions)
+              @if ($showActionsCol)
               <td class="px-3 py-2 border text-center align-middle">
                 <div class="inline-flex items-center justify-center gap-1">
                   @if ($canDownload)

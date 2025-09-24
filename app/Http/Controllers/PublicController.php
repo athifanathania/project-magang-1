@@ -33,7 +33,7 @@ class PublicPanelProvider extends PanelProvider
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
 
             ->navigationItems([
-                \Filament\Navigation\NavigationItem::make('Masuk Admin/Editor')
+                \Filament\Navigation\NavigationItem::make('Masuk User')
                     ->icon('heroicon-m-arrow-right-on-rectangle') // ← ganti ikon yang valid
                     ->url('/admin/login')
                     ->sort(9999),

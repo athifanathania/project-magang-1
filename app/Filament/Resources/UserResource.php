@@ -119,6 +119,7 @@ class UserResource extends Resource
                     'Marketing' => 'Marketing',
                     'Maintenance' => 'Maintenance',
                     'Engineering' => 'Engineering',
+                    'Finance' => 'Finance',
                     'IT' => 'IT',
                 ])
                 ->searchable()

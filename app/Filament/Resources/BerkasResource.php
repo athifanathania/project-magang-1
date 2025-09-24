@@ -332,14 +332,15 @@ class BerkasResource extends Resource
                         ->label('')
                         ->icon('heroicon-m-paper-clip')
                         ->color('gray')
-                        ->size('xs')                   // << kecilkan font
+                        ->size('xs')                  
                         ->modalHeading('Lampiran')
                         ->modalSubmitAction(false)
                         ->modalCancelActionLabel('Tutup')
                         ->modalContent(function (\App\Models\Berkas $record) {
                             $roots = $record->rootLampirans()->with('childrenRecursive')->orderBy('id')->get();
                             return view('tables.rows.lampirans', ['record' => $record, 'lampirans' => $roots]);
-                        }),
+                        })
+                        ->tooltip('Lampiran'),
            
                     ViewAction::make()
                         ->label('')
@@ -370,9 +371,16 @@ class BerkasResource extends Resource
                         ->openUrlInNewTab()
                         ->visible(fn () => \Illuminate\Support\Facades\Gate::allows('download-source'))
                         ->disabled(fn ($record) => blank($record->dokumen_src))
-                        ->tooltip(fn ($record) => blank($record->dokumen_src) ? 'File asli belum diunggah' : null),
-
-                        
+                        ->tooltip(fn ($record) => blank($record->dokumen_src)
+                            ? 'File asli belum diunggah'
+                            : 'Download file asli'
+                        )
+                        // jaga-jaga kalau tooltip bawaan tidak muncul di kondisi tertentu:
+                        ->extraAttributes(fn ($record) => [
+                            'title' => blank($record->dokumen_src)
+                                ? 'File asli belum diunggah'
+                                : 'Download file asli',
+                        ]),
                 ])
             
             ->bulkActions([

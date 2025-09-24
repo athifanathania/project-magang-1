@@ -17,6 +17,7 @@ class ImmLampiran extends Model
         'keywords' => 'array',
         'file_versions' => 'array',
         'file_src_versions'    => 'array',
+        'deadline_at'       => 'date',
     ];
 
     public function documentable(): MorphTo

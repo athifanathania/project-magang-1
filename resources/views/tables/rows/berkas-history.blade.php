@@ -19,8 +19,8 @@ $versions = $all->reverse()->values();
 
 $canEdit     = auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false;
 $canDelete   = $canEdit;
-$canDownload = $canEdit || (auth()->user()?->hasAnyRole(['Staff']) ?? false);
-$showActions = $canEdit || $canDelete || $canDownload;
+$canDownload = $canEdit;  
+$showActionsCol = $canEdit || $canDelete || $canDownload; 
 
 $tz = auth()->user()->timezone ?? config('app.timezone') ?: 'Asia/Jakarta';
 $fmtDate = function ($d) use ($tz) {
@@ -72,13 +72,19 @@ $extColor = fn ($ext) => match (strtolower((string)$ext)) {
     pageId: '{{ $this->getId() }}',
   }"
 >
+  <div class="mt-4">
+    <h3 class="text-sm font-semibold">
+      Riwayat file dari dokumen
+      <span class="text-gray-900">"{{ $rec?->nama ?? 'Dokumen' }}"</span>
+    </h3>
+  </div>
   <div class="mt-2 rounded-xl ring-1 ring-gray-200 shadow-sm overflow-hidden">
     <div class="max-w-full overflow-x-auto">
       <table class="w-full text-sm border-collapse table-fixed">
         <colgroup>
           <col class="w-10"><col><col class="w-20"><col class="w-40">
           <col class="w-24"><col class="w-24"><col class="w-20">
-          @if($showActions)<col class="w-10">@endif
+          @if($showActionsCol) <col class="w-10">@endif
         </colgroup>
 
         <thead class="bg-gray-50/80">
@@ -90,7 +96,7 @@ $extColor = fn ($ext) => match (strtolower((string)$ext)) {
             <th class="px-3 py-2 border">Tgl Terbit</th>
             <th class="px-3 py-2 border">Tgl Ubah</th>
             <th class="px-3 py-2 border">Ukuran</th>
-            @if ($showActions) <th class="px-3 py-2 border text-center">Aksi</th> @endif
+            @if ($showActionsCol) <th class="px-3 py-2 border text-center">Aksi</th> @endif
           </tr>
         </thead>
 
@@ -140,7 +146,7 @@ $extColor = fn ($ext) => match (strtolower((string)$ext)) {
               <td class="px-3 py-2 border">{{ $fmtDate($v['replaced_at'] ?? null) }}</td>
               <td class="px-3 py-2 border whitespace-nowrap">{{ $sizeText }}</td>
 
-              @if ($showActions)
+              @if ($showActionsCol)
               <td class="px-3 py-2 border text-center align-middle">
                 <div class="inline-flex items-center justify-center gap-1">
                   @if ($canDownload)
