@@ -142,6 +142,7 @@ class LampiranResource extends Resource
                 ->previewable(true)
                 ->downloadable(false)
                 ->openable(false)
+                ->disabled($readonly)
                 ->visible(fn () => auth()->user()?->hasRole('Admin') ?? false)
                 ->helperText('Hanya Admin yang dapat mengganti file asli'),
             

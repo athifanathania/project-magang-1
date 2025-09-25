@@ -16,6 +16,7 @@ use Filament\Tables\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Facades\Filament;
 
 class ImmAuditInternalResource extends Resource
 {
@@ -31,9 +32,9 @@ class ImmAuditInternalResource extends Resource
     public static function form(Form $form): Form
     {
         return $form->schema([
-            Select::make('departemen')
+            TextInput::make('departemen')
                 ->label('Nama Departemen')
-                ->options([
+                ->datalist([
                     'QC' => 'QC',
                     'PPC' => 'PPC',
                     'Produksi' => 'Produksi',
@@ -46,7 +47,7 @@ class ImmAuditInternalResource extends Resource
                     'Finance' => 'Finance',
                     'IT' => 'IT',
                 ])
-                ->searchable()
+                // ->searchable()
                 ->required()
                 ->placeholder('Pilih Departemen'),
 
@@ -106,9 +107,16 @@ class ImmAuditInternalResource extends Resource
         ];
     }
 
-    // (opsional) batasi akses sama seperti IMM lain
     public static function canViewAny(): bool
     {
+        $panel = optional(Filament::getCurrentPanel())->getId();
+
+        // Panel publik boleh melihat (read-only)
+        if ($panel === 'public') {
+            return true;
+        }
+
+        // Panel admin: tetap pakai aturan lama
         return (auth()->user()?->can('imm.view') ?? false)
             || (auth()->user()?->hasAnyRole(['Admin','Editor','Staff']) ?? false);
     }
@@ -120,7 +128,15 @@ class ImmAuditInternalResource extends Resource
 
     public static function canCreate(): bool
     {
+        return auth()->user()?->hasRole('Admin') ?? false;
+    }
+    public static function canEdit($record): bool
+    {
         return auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false;
+    }
+    public static function canDelete($record): bool
+    {
+        return auth()->user()?->hasRole('Admin') ?? false;
     }
 
 }

@@ -25,10 +25,15 @@ class ImmLampiranResource extends Resource
 
     public static function form(Form $form): Form
     {
+        // helper sekali, dipakai ulang di semua closure
+        $isAuditLocked = fn (?ImmLampiran $record) =>
+            $record
+            && str_contains(ltrim((string)($record->documentable_type ?? ''), '\\'), 'ImmAuditInternal')
+            && ! (auth()->user()?->hasRole('Admin') ?? false);
+
         return $form->schema([
             Section::make()->schema([
 
-                // tetap
                 Hidden::make('documentable_type')
                     ->default(fn (?ImmLampiran $record) =>
                         $record?->documentable_type
@@ -36,12 +41,14 @@ class ImmLampiranResource extends Resource
                         ?? request('doc_type')
                     ),
 
-                // === DOKUMEN (dropdown) ===
+                // Dokumen / Departemen
                 Select::make('documentable_id')
-                    ->label('Dokumen')
-                    ->required()
-                    ->searchable()
-                    ->preload()
+                    ->label(fn (Get $get, ?ImmLampiran $record) =>
+                        ($record && str_contains(ltrim((string)($record->documentable_type ?? ''), '\\'), 'ImmAuditInternal'))
+                            ? 'Departemen'
+                            : 'Dokumen'
+                    )
+                    ->required()->searchable()->preload()
                     ->default(fn () => request('documentable_id') ?? request('doc_id'))
                     ->options(function (Get $get, ?ImmLampiran $record) {
                         $type = $record?->documentable_type
@@ -59,31 +66,54 @@ class ImmLampiranResource extends Resource
                         $cls = class_exists($type) ? $type : ($map[$type] ?? null);
                         if (! $cls) return [];
 
-                        $table = (new $cls)->getTable();
-                        $labelCol = collect(['nama_dokumen','nama','title','name'])
-                            ->first(fn ($c) => Schema::hasColumn($table, $c));
+                        $table   = (new $cls)->getTable();
+                        $labelCol= collect(['departemen','nama_dokumen','nama','title','name'])
+                            ->first(fn ($c) => \Illuminate\Support\Facades\Schema::hasColumn($table, $c));
 
                         $q = $cls::query();
-                        if ($labelCol) $q->orderBy($labelCol,'asc');
+                        if ($labelCol) $q->orderBy($labelCol, 'asc');
 
                         return $q->get()->mapWithKeys(function ($m) {
-                            $label = $m->nama_dokumen ?? $m->nama ?? $m->title ?? $m->name ?? ('#'.$m->getKey());
+                            $label = $m->departemen ?? $m->nama_dokumen ?? $m->nama ?? $m->title ?? $m->name ?? ('#'.$m->getKey());
                             return [$m->getKey() => $label];
                         })->all();
                     })
-                    ->disabledOn('view')
-                    // 🔒: saat EDIT & bukan Admin → kunci & jangan dehydrated
-                    ->disabled(fn (?ImmLampiran $record) => $record && ! (auth()->user()?->hasRole('Admin') ?? false))
-                    ->dehydrated(fn (?ImmLampiran $record) => ! ($record && ! (auth()->user()?->hasRole('Admin') ?? false))),
+                    ->getOptionLabelUsing(function ($value, Get $get, ?ImmLampiran $record) {
+                        if (! $value) return null;
+                        $type = $record?->documentable_type
+                            ?: $get('documentable_type')
+                            ?: request('documentable_type')
+                            ?: request('doc_type');
 
-                // === PARENT (opsional) – hanya lampiran milik dokumen yang dipilih ===
+                        $map = [
+                            'ImmManualMutu' => \App\Models\ImmManualMutu::class,
+                            'ImmProsedur'   => \App\Models\ImmProsedur::class,
+                            'ImmInstruksiStandar' => \App\Models\ImmInstruksiStandar::class,
+                            'ImmFormulir'   => \App\Models\ImmFormulir::class,
+                            'ImmAuditInternal' => \App\Models\ImmAuditInternal::class,
+                        ];
+                        $cls = class_exists($type) ? $type : ($map[$type] ?? null);
+                        if (! $cls) return '#'.$value;
+
+                        $m = $cls::find($value);
+                        return $m?->departemen ?? $m?->nama_dokumen ?? $m?->nama ?? $m?->title ?? $m?->name ?? ('#'.$value);
+                    })
+                    ->disabled(fn (?ImmLampiran $record, string $operation) =>
+                        $operation === 'view' || $isAuditLocked($record)
+                    )
+                    ->dehydrated(fn (?ImmLampiran $record, string $operation) =>
+                        $operation !== 'view' && ! $isAuditLocked($record)
+                    ),
+
+                // Parent
                 Select::make('parent_id')
-                    ->label('Parent (opsional)')
-                    ->searchable()
-                    ->preload()
-                    ->nullable()
+                    ->label(fn (Get $get, ?ImmLampiran $record) =>
+                        ($record && str_contains(ltrim((string)($record->documentable_type ?? ''), '\\'), 'ImmAuditInternal'))
+                            ? 'Parent Temuan (opsional)'
+                            : 'Parent (opsional)'
+                    )
+                    ->searchable()->preload()->nullable()
                     ->default(fn () => request('parent_id'))
-                    ->disabledOn('view')
                     ->reactive()
                     ->options(function (Get $get, ?ImmLampiran $record) {
                         $type = $record?->documentable_type
@@ -110,69 +140,72 @@ class ImmLampiranResource extends Resource
                                 ->where('documentable_type', $cls)
                                 ->where('documentable_id', $docId)
                             )
-                            ->when($record, fn ($q) => $q->where('id','!=',$record->id))
                             ->orderBy('nama')
-                            ->pluck('nama','id');
+                            ->pluck('nama', 'id');
                     })
-                    // 🔒
-                    ->disabled(fn (?ImmLampiran $record) => $record && ! (auth()->user()?->hasRole('Admin') ?? false))
-                    ->dehydrated(fn (?ImmLampiran $record) => ! ($record && ! (auth()->user()?->hasRole('Admin') ?? false))),
+                    ->getOptionLabelUsing(fn ($value) =>
+                        optional(\App\Models\ImmLampiran::find($value))->nama ?? ('#'.$value)
+                    )
+                    ->disabled(fn (?ImmLampiran $record, string $operation) =>
+                        $operation === 'view' || $isAuditLocked($record)
+                    )
+                    ->dehydrated(fn (?ImmLampiran $record, string $operation) =>
+                        $operation !== 'view' && ! $isAuditLocked($record)
+                    ),
 
-                // === Field utama ===
+                // Nama
                 TextInput::make('nama')
-                    ->label('Nama Lampiran')
-                    ->required()
-                    ->disabledOn('view')
-                    // 🔒
-                    ->disabled(fn (?ImmLampiran $record) => $record && ! (auth()->user()?->hasRole('Admin') ?? false))
-                    ->dehydrated(fn (?ImmLampiran $record) => ! ($record && ! (auth()->user()?->hasRole('Admin') ?? false))),
+                    ->label('Nama Lampiran')->required()
+                    ->disabled(fn (?ImmLampiran $record, string $operation) =>
+                        $operation === 'view' || $isAuditLocked($record)
+                    )
+                    ->dehydrated(fn (?ImmLampiran $record, string $operation) =>
+                        $operation !== 'view' && ! $isAuditLocked($record)
+                    ),
 
+                // Kata Kunci
                 TagsInput::make('keywords')
-                    ->label('Kata Kunci')
-                    ->separator(',')
-                    ->reorderable()
-                    ->disabledOn('view')
-                    // 🔒
-                    ->disabled(fn (?ImmLampiran $record) => $record && ! (auth()->user()?->hasRole('Admin') ?? false))
-                    ->dehydrated(fn (?ImmLampiran $record) => ! ($record && ! (auth()->user()?->hasRole('Admin') ?? false))),
+                    ->label('Kata Kunci')->separator(',')->reorderable()
+                    ->disabled(fn (?ImmLampiran $record, string $operation) =>
+                        $operation === 'view' || $isAuditLocked($record)
+                    )
+                    ->dehydrated(fn (?ImmLampiran $record, string $operation) =>
+                        $operation !== 'view' && ! $isAuditLocked($record)
+                    ),
 
+                // Deadline (khusus Audit)
                 DatePicker::make('deadline_at')
-                    ->label('Deadline Upload')
-                    ->native(false)
-                    ->displayFormat('d/M/Y')
-                    ->closeOnDateSelection()
-                    ->disabledOn('view')
+                    ->label('Deadline Upload')->native(false)
+                    ->displayFormat('d/M/Y')->closeOnDateSelection()
                     ->helperText('Batas waktu departemen mengunggah file')
-                    ->visible(fn ($get) => str_contains((string) $get('documentable_type'), 'ImmAuditInternal'))
+                    ->visible(fn (Get $get, ?ImmLampiran $record) =>
+                        $record && str_contains(ltrim((string)($record->documentable_type ?? ''), '\\'), 'ImmAuditInternal')
+                    )
                     ->nullable()
-                    // 🔒
-                    ->disabled(fn (?ImmLampiran $record) => $record && ! (auth()->user()?->hasRole('Admin') ?? false))
-                    ->dehydrated(fn (?ImmLampiran $record) => ! ($record && ! (auth()->user()?->hasRole('Admin') ?? false))),
+                    ->disabled(fn (?ImmLampiran $record, string $operation) =>
+                        $operation === 'view' || $isAuditLocked($record)
+                    )
+                    ->dehydrated(fn (?ImmLampiran $record, string $operation) =>
+                        $operation !== 'view' && ! $isAuditLocked($record)
+                    ),
 
-                // === FILE UTAMA → tetap bisa diubah oleh Editor/Departemen
+                // File utama: tetap editable
                 FileUpload::make('file')
-                    ->disk('private')
-                    ->directory('imm/lampiran')
-                    ->previewable(true)
-                    ->openable(false)
-                    ->disabledOn('view')
-                    ->downloadable(false)
-                    ->saveUploadedFileUsing(function (TemporaryUploadedFile $file) {
-                        $disk = 'private';
-                        $dir  = 'imm/lampiran';
+                    ->disk('private')->directory('imm/lampiran')
+                    ->previewable(true)->openable(false)->downloadable(false)
+                    ->saveUploadedFileUsing(function (\Livewire\Features\SupportFileUploads\TemporaryUploadedFile $file) {
+                        $disk = 'private'; $dir = 'imm/lampiran';
                         $orig = $file->getClientOriginalName();
                         $name = pathinfo($orig, PATHINFO_FILENAME);
                         $ext  = $file->getClientOriginalExtension();
-
                         $candidate = $orig; $i = 1;
                         while (\Storage::disk($disk)->exists("$dir/$candidate")) {
-                            $candidate = "{$name} ({$i}).{$ext}";
-                            $i++;
+                            $candidate = "{$name} ({$i}).{$ext}"; $i++;
                         }
                         return $file->storeAs($dir, $candidate, $disk);
                     })
                     ->hintAction(
-                        FormAction::make('openFile')
+                        \Filament\Forms\Components\Actions\Action::make('openFile')
                             ->label('Buka file')
                             ->url(fn ($record) => $record?->file
                                 ? route('media.imm.lampiran', ['lampiran' => $record->id])
@@ -180,24 +213,25 @@ class ImmLampiranResource extends Resource
                                 shouldOpenInNewTab: true
                             )
                             ->visible(fn ($record) => filled($record?->file))
-                    ),
+                    )
+                    ->disabledOn('view'),
 
-                // === FILE ASLI (Admin saja) – tetap seperti sebelumnya
+                // File asli (Admin saja)
                 FileUpload::make('file_src')
                     ->label('File Asli (Admin saja)')
-                    ->disk('private')
-                    ->directory('imm/lampiran/_source')
-                    ->preserveFilenames()
-                    ->rules(['nullable','file'])
-                    ->previewable(true)
-                    ->downloadable(false)
-                    ->openable(false)
-                    ->disabledOn('view')
+                    ->disk('private')->directory('imm/lampiran/_source')
+                    ->preserveFilenames()->rules(['nullable','file'])
+                    ->previewable(true)->downloadable(false)->openable(false)
                     ->visible(fn () => auth()->user()?->hasRole('Admin') ?? false)
-                    ->helperText('Hanya Admin yang dapat mengganti file asli'),
+                    ->disabledOn('view'),
             ])->columns(2),
 
-            Section::make('Riwayat lampiran')
+            Section::make()
+                ->heading(fn (Get $get, ?ImmLampiran $record) =>
+                    ($record && str_contains(ltrim((string)($record->documentable_type ?? ''), '\\'), 'ImmAuditInternal'))
+                        ? 'Riwayat Temuan'
+                        : 'Riwayat lampiran'
+                )
                 ->visibleOn('view')
                 ->schema([
                     ViewField::make('imm_history')
@@ -206,6 +240,7 @@ class ImmLampiranResource extends Resource
                 ]),
         ]);
     }
+
 
     public static function getPages(): array
     {

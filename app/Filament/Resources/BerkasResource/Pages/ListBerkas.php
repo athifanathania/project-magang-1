@@ -8,10 +8,13 @@ use App\Models\Lampiran;
 use Filament\Actions;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
+use App\Livewire\Concerns\HandlesLampiran;
 
 class ListBerkas extends ListRecords
 {
     protected static string $resource = BerkasResource::class;
+
+    use HandlesLampiran;
 
     /** dipakai untuk auto-buka modal setelah create lampiran */
     protected ?int $openLampiranForId = null;
@@ -66,78 +69,12 @@ class ListBerkas extends ListRecords
             ->send();
     }
 
-    /** === DIPANGGIL LANGSUNG DARI BLADE (BUKAN EVENT) === */
-    public function onDeleteLampiranVersion(array $payload): void
-    {
-        $id  = (int)($payload['lampiranId'] ?? $payload['id'] ?? 0);
-        $idx = (int)($payload['index'] ?? -1);
-
-        if (! $id || $idx < 0) {
-            Notification::make()->title('Payload hapus versi tidak valid.')->danger()->send();
-            return;
-        }
-
-        $this->handleDeleteLampiranVersion($id, $idx);
-    }
-
-    public function handleDeleteLampiranVersion(int $lampiranId, int $index): void
-    {
-        $m = Lampiran::find($lampiranId);
-        if (! $m) {
-            Notification::make()->title('Lampiran tidak ditemukan')->danger()->send();
-            return;
-        }
-
-        // supaya modal "lampiran" kebuka lagi setelah refresh
-        $this->openLampiranForId = $m->berkas_id;
-
-        $ok = $m->deleteVersionAtIndex($index);
-
-        Notification::make()
-            ->title($ok ? 'Versi lampiran dihapus' : 'Versi tidak ditemukan')
-            ->{$ok ? 'success' : 'danger'}()
-            ->send();
-
-        $this->dispatch('$refresh');
-    }
-
-    /** === DIPANGGIL LANGSUNG DARI BLADE (BUKAN EVENT) === */
-    public function onLampiranUpdateVersionDesc(array $payload): void
-    {
-        $id   = (int)($payload['lampiranId'] ?? $payload['id'] ?? 0);
-        $idx  = (int)($payload['index'] ?? -1);
-        $desc = trim((string)($payload['description'] ?? ''));
-
-        if (! $id || $idx < 0) {
-            Notification::make()->title('Payload tidak valid')->danger()->send();
-            return;
-        }
-
-        $m = Lampiran::find($id);
-        if (! $m) {
-            Notification::make()->title('Lampiran tidak ditemukan')->danger()->send();
-            return;
-        }
-
-        $ok = $m->updateVersionDescription($idx, $desc);
-
-        Notification::make()
-            ->title($ok ? 'Deskripsi revisi diperbarui' : 'Versi tidak ditemukan')
-            ->{$ok ? 'success' : 'danger'}()
-            ->send();
-
-        // buka kembali modal Lampiran pada record yg sama
-        $this->openLampiranForId = $m->berkas_id;
-
-        $this->dispatch('$refresh');
-    }
-
     protected function getHeaderActions(): array
     {
         return [ Actions\CreateAction::make() ];
     }
 
-    /** (biar tetap ada untuk dokumen berkas) */
+    /** (tetap ada utk versi dokumen berkas) */
     #[\Livewire\Attributes\On('doc-delete-version')]
     public function onDocDeleteVersion($payload = []): void
     {

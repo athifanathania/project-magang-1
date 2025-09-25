@@ -95,7 +95,8 @@
     toDeleteVersion: { lampiranId: null, index: null, name: '' },
     editVersion:     { lampiranId: null, index: null, name: '', description: '' },
 
-    pageId: '{{ method_exists($this, 'getLivewire') ? $this->getLivewire()->getId() : $this->getId() }}',
+    // SAMA DGN IMM
+    pageId: '{{ $this->getId() }}',
   }"
 >
   <div class="mt-4">
@@ -247,8 +248,7 @@
       <x-filament::button type="button" color="danger"
         x-on:click.stop.prevent="
           $dispatch('close-modal', { id: 'confirm-delete-lampiran-version-{{ $rec->getKey() }}' });
-          const comp = window.Livewire.find(pageId);
-          if (comp) comp.call('onDeleteLampiranVersion', {
+          window.Livewire.find(pageId).call('onDeleteImmVersion', {
             lampiranId: Number(toDeleteVersion.lampiranId ?? 0),
             index:      Number(toDeleteVersion.index ?? -1)
           });
@@ -285,12 +285,12 @@
 
       <x-filament::button color="primary"
         x-on:click.stop.prevent="
-          const comp = window.Livewire.find(pageId);
-          if (comp) comp.call('onLampiranUpdateVersionDesc', {
+          const payload = {
             lampiranId:  Number(editVersion.lampiranId ?? 0),
             index:       Number(editVersion.index ?? -1),
             description: String(editVersion.description ?? '')
-          });
+          };
+          window.Livewire.find(pageId).call('updateVersionDescription', payload);
           $dispatch('close-modal', { id: 'edit-lampiran-version-{{ $rec->getKey() }}' });
         ">
         Simpan

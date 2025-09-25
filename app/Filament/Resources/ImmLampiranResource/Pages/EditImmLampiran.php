@@ -41,7 +41,7 @@ class EditImmLampiran extends EditRecord
 
         if (request()->boolean('missingFile')) {
             Notification::make()
-                ->title('Silakan tambahkan file lampiran')
+                ->title('Silakan tambahkan file')
                 ->warning()
                 ->send();
         }
@@ -74,5 +74,25 @@ class EditImmLampiran extends EditRecord
     protected function getSavedNotification(): ?Notification
     {
         return Notification::make()->title('Perubahan tersimpan')->success();
+    }
+    
+    public function getTitle(): string
+    {
+        $type = ltrim((string)($this->record->documentable_type ?? ''), '\\');
+
+        return str_contains($type, 'ImmAuditInternal')
+            ? 'Edit Temuan Audit'
+            : 'Edit Imm Lampiran';
+    }
+
+    // optional: biar H1 & breadcrumb ikut berubah juga
+    public function getHeading(): string
+    {
+        return $this->getTitle();
+    }
+
+    public function getBreadcrumb(): string
+    {
+        return $this->getTitle();
     }
 }

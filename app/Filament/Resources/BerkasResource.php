@@ -164,8 +164,8 @@ class BerkasResource extends Resource
                 // =========================
                 // Lampiran (disarankan kelola via tabel/aksi)
                 // =========================
-                \Filament\Forms\Components\Section::make('Lampiran')
-                    ->description('Kelola lampiran melalui tombol "Tambah Lampiran" di panel tabel.'),
+                \Filament\Forms\Components\Section::make('Dokumen Pelengkap')
+                    ->description('Kelola dokumen pelengkap melalui tombol "Tambah Lampiran" di panel tabel.'),
                 Section::make('Riwayat dokumen')
                     ->visible(fn (string $context) => $context === 'view') // hanya muncul di modal View
                     ->schema([
@@ -333,14 +333,15 @@ class BerkasResource extends Resource
                         ->icon('heroicon-m-paper-clip')
                         ->color('gray')
                         ->size('xs')                  
-                        ->modalHeading('Lampiran')
+                        ->modalHeading('Dokumen Pelengkap')
                         ->modalSubmitAction(false)
+                        ->modalWidth('7xl')
                         ->modalCancelActionLabel('Tutup')
                         ->modalContent(function (\App\Models\Berkas $record) {
                             $roots = $record->rootLampirans()->with('childrenRecursive')->orderBy('id')->get();
                             return view('tables.rows.lampirans', ['record' => $record, 'lampirans' => $roots]);
                         })
-                        ->tooltip('Lampiran'),
+                        ->tooltip('Dokumen Pelengkap'),
            
                     ViewAction::make()
                         ->label('')

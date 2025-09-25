@@ -108,8 +108,17 @@
   }"
 >
   <div class="mt-4">
-    <h3 class="text-sm font-semibold">Riwayat file dari lampiran <span class="text-gray-900">"{{ $lampiranName }}"</span></h3>
+    @php
+        // Ambil record dari form
+        $record   = $getRecord ? $getRecord() : ($record ?? null);
+        $docType  = class_basename($record->documentable_type ?? '');
+        $isAudit  = str_contains($docType, 'ImmAuditInternal');
+        $noun     = $isAudit ? 'temuan' : 'lampiran';   // kata yang dipakai dalam kalimat
+    @endphp
 
+    <h3 class="text-sm font-semibold">
+      Riwayat file dari {{ $noun }} <span class="text-gray-900">"{{ $lampiranName }}"</span>
+    </h3>
     <div class="mt-2 rounded-xl ring-1 ring-gray-200 shadow-sm overflow-hidden">
       <div class="max-w-full overflow-x-auto">
       <table class="w-full text-sm border-collapse table-fixed">

@@ -181,9 +181,9 @@ $canCreateLampiran = $user?->can('lampiran.create') ?? false;
 
     <div class="panel-head mb-3">
         <div class="flex items-center gap-2">
-            <h3 class="text-lg font-semibold text-gray-800">Lampiran</h3>
+            <h3 class="text-lg font-semibold text-gray-800">Dokumen Pelengkap</h3>
             <span class="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">
-            {{ $totalLampiranCocok }} dari {{ $totalLampiranSemua }} lampiran
+            {{ $totalLampiranCocok }} dari {{ $totalLampiranSemua }} dokumen
             </span>
         </div>
 
