@@ -30,6 +30,10 @@ class AuthServiceProvider extends ServiceProvider
         Gate::define('replace-source', fn ($user) =>
             $user?->hasRole('Admin') === true
         );
+
+        Gate::define('open-file', function ($user) {
+            return $user?->hasAnyRole(['Admin', 'Editor', 'Staff']) ?? false;
+        });
     }
 
 }

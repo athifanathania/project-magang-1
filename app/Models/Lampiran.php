@@ -270,9 +270,9 @@ class Lampiran extends Model
         $activeIndex = count($versions); // index “baris aktif” pada blade
 
         if ($index < $activeIndex) {
-            $versions[$index]['description'] = $desc;
+            $versions[$index]['description'] = ($desc === '') ? null : $desc;
         } elseif ($index === $activeIndex) {
-            $meta['__current_desc'] = $desc;
+            $meta['__current_desc'] = ($desc === '') ? null : $desc;
         } else {
             return false;
         }

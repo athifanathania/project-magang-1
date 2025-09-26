@@ -4,6 +4,7 @@ namespace App\Livewire\Concerns;
 
 use App\Models\Lampiran;
 use Filament\Notifications\Notification;
+use Livewire\Attributes\On;
 
 trait HandlesLampiran
 {
@@ -13,7 +14,6 @@ trait HandlesLampiran
             Notification::make()->title('Payload hapus versi tidak valid.')->danger()->send();
             return;
         }
-
         if (! (auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false)) {
             Notification::make()->title('Tidak diizinkan.')->danger()->send();
             return;
@@ -27,39 +27,21 @@ trait HandlesLampiran
 
         $ok = $m->deleteVersionAtIndex($index);
 
-        Notification::make()
+        \Filament\Notifications\Notification::make()
             ->title($ok ? 'Versi lampiran dihapus' : 'Versi tidak ditemukan')
             ->{$ok ? 'success' : 'danger'}()
             ->send();
 
-        // buka kembali modal lampiran pada record yg sama setelah refresh (opsional)
-        $this->openLampiranForId = $m->berkas_id ?? null;
+        // Optimistic UI (untuk Alpine)
+        $this->dispatch('lampiran-history-changed', lampiranId: (int) $m->getKey(), index: (int) $index, description: null);
 
+        // >>> INI KUNCI: re-render komponen (AJAX), jangan skip
         $this->dispatch('$refresh');
     }
 
-    /** === DIPANGGIL DARI JS (SAMAKAN DGN IMM) === */
-    public function onDeleteImmVersion(array $payload): void
+    public function handleUpdateLampiranVersionDesc(int $lampiranId, int $index, string $description = ''): void
     {
-        $id  = (int)($payload['lampiranId'] ?? $payload['id'] ?? 0);
-        $idx = (int)($payload['index'] ?? -1);
-
-        if (! $id || $idx < 0) {
-            Notification::make()->title('Payload hapus versi tidak valid.')->danger()->send();
-            return;
-        }
-
-        $this->handleDeleteLampiranVersion($id, $idx);
-    }
-
-    /** === DIPANGGIL DARI JS (SAMAKAN DGN IMM) === */
-    public function updateVersionDescription(array $payload): void
-    {
-        $id   = (int)($payload['lampiranId'] ?? $payload['id'] ?? 0);
-        $idx  = (int)($payload['index'] ?? -1);
-        $desc = trim((string)($payload['description'] ?? ''));
-
-        if (! $id || $idx < 0) {
+        if (! $lampiranId || $index < 0) {
             Notification::make()->title('Payload edit revisi tidak valid.')->danger()->send();
             return;
         }
@@ -68,35 +50,53 @@ trait HandlesLampiran
             return;
         }
 
-        $m = Lampiran::find($id);
+        $m = Lampiran::find($lampiranId);
         if (! $m) {
             Notification::make()->title('Lampiran tidak ditemukan')->danger()->send();
             return;
         }
 
-        // Model Lampiran sudah punya helper
-        $ok = $m->updateVersionDescription($idx, $desc);
+        $ok = $m->updateVersionDescription($index, $description);
 
-        Notification::make()
+        \Filament\Notifications\Notification::make()
             ->title($ok ? 'Deskripsi revisi diperbarui' : 'Versi tidak ditemukan')
             ->{$ok ? 'success' : 'danger'}()
             ->send();
 
-        // supaya modal "Lampiran" kebuka lagi untuk record yang sama setelah refresh
-        $this->openLampiranForId = $m->berkas_id ?? null;
+        $this->dispatch('lampiran-history-changed', lampiranId: (int) $m->getKey(), index: (int) $index, description: (string) $description);
 
+        // Boleh refresh juga supaya state server & DOM selalu sinkron
         $this->dispatch('$refresh');
     }
 
-    /** === KOMPAT: bila masih ada blade lama memanggil nama ini === */
-    public function onDeleteLampiranVersion(array $payload): void
+    // Livewire v3 events (tetap)
+    #[On('lampiran-delete-version')]
+    public function onDeleteLampiranVersion(int $lampiranId, int $index): void
     {
-        $this->onDeleteImmVersion($payload);
+        $this->handleDeleteLampiranVersion($lampiranId, $index);
     }
 
-    /** === KOMPAT: bila masih ada blade lama memanggil nama ini === */
-    public function onLampiranUpdateVersionDesc(array $payload): void
+    #[On('lampiran-update-version-desc')]
+    public function onLampiranUpdateVersionDesc(int $lampiranId, int $index, string $description = ''): void
     {
-        $this->updateVersionDescription($payload);
+        $this->handleUpdateLampiranVersionDesc($lampiranId, $index, $description);
+    }
+
+    // Kompat lama (boleh tetap, tidak mengganggu)
+    public function onDeleteImmVersion(array $payload): void
+    {
+        $this->handleDeleteLampiranVersion(
+            (int)($payload['lampiranId'] ?? $payload['id'] ?? 0),
+            (int)($payload['index'] ?? -1),
+        );
+    }
+
+    public function updateVersionDescription(array $payload): void
+    {
+        $this->handleUpdateLampiranVersionDesc(
+            (int)($payload['lampiranId'] ?? $payload['id'] ?? 0),
+            (int)($payload['index'] ?? -1),
+            trim((string)($payload['description'] ?? '')),
+        );
     }
 }

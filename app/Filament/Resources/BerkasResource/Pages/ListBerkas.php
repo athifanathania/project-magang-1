@@ -16,8 +16,8 @@ class ListBerkas extends ListRecords
 
     use HandlesLampiran;
 
-    /** dipakai untuk auto-buka modal setelah create lampiran */
-    protected ?int $openLampiranForId = null;
+    /** dipakai untuk auto-buka modal setelah aksi versi */
+    public ?int $openLampiranForId = null;
 
     public function mount(): void
     {
@@ -28,21 +28,24 @@ class ListBerkas extends ListRecords
         }
     }
 
-    /** WAJIB public, serta panggil parent agar $table terinisialisasi */
+    /** WAJIB public + panggil parent supaya $table siap */
     public function bootedInteractsWithTable(): void
     {
         parent::bootedInteractsWithTable();
 
-        if (! $this->openLampiranForId) {
-            return;
-        }
+        if (! $this->openLampiranForId) return;
 
         if ($record = Berkas::find($this->openLampiranForId)) {
-            // nama action harus sama dengan yang di table(): Action::make('lampiran')
+            // nama action harus sama dg Table Action: Action::make('lampiran')
             $this->mountTableAction('lampiran', $record);
         }
 
         $this->openLampiranForId = null; // sekali pakai
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [ Actions\CreateAction::make() ];
     }
 
     /** Dipanggil dari blade via $wire.handleDeleteLampiran(...) */
@@ -60,8 +63,6 @@ class ListBerkas extends ListRecords
 
         $lampiran->delete();
 
-        $this->dispatch('$refresh');
-
         Notification::make()
             ->title('Lampiran terhapus')
             ->body('Lampiran beserta semua subnya telah dihapus.')
@@ -69,21 +70,14 @@ class ListBerkas extends ListRecords
             ->send();
     }
 
-    protected function getHeaderActions(): array
-    {
-        return [ Actions\CreateAction::make() ];
-    }
-
     /** (tetap ada utk versi dokumen berkas) */
     #[\Livewire\Attributes\On('doc-delete-version')]
-    public function onDocDeleteVersion($payload = []): void
-    {
-        $payload = is_array($payload) ? $payload : [];
-        $type  = (string)($payload['type'] ?? 'berkas');
-        $id    = (int)   ($payload['id']   ?? 0);
-        $index = (int)   ($payload['index']?? -1);
-        $path  = (string)($payload['path'] ?? '');
-
+    public function onDocDeleteVersion(
+        string $type = 'berkas',
+        int $id = 0,
+        int $index = -1,
+        string $path = ''
+    ): void {
         try {
             if ($type !== 'berkas') {
                 throw new \RuntimeException('Tipe tidak dikenali.');
@@ -106,8 +100,6 @@ class ListBerkas extends ListRecords
                 ->title($ok ? 'Versi dihapus' : 'Gagal menghapus versi')
                 ->{$ok ? 'success' : 'danger'}()
                 ->send();
-
-            $this->dispatch('$refresh');
 
         } catch (\Throwable $e) {
             Notification::make()

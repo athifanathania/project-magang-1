@@ -131,7 +131,10 @@ class LampiranResource extends Resource
                                 : null,
                             shouldOpenInNewTab: true
                         )
-                        ->visible(fn ($record) => filled($record?->file))
+                        ->visible(fn ($record) =>
+                                filled($record?->file)
+                                && (auth()->user()?->hasAnyRole(['Admin','Editor','Staff']) ?? false)
+                            )
                 ),
             FileUpload::make('file_src')
                 ->label('File Asli (Admin saja)')

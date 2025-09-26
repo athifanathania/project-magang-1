@@ -94,10 +94,42 @@
   x-data="{
     toDeleteVersion: { lampiranId: null, index: null, name: '' },
     editVersion:     { lampiranId: null, index: null, name: '', description: '' },
-
-    // SAMA DGN IMM
-    pageId: '{{ $this->getId() }}',
   }"
+  x-on:lampiran-history-changed.document="
+    if (Number($event.detail?.lampiranId) !== {{ $rec->getKey() }}) return;
+
+    const idx  = Number($event.detail?.index ?? -1);
+    const desc = ($event.detail?.description ?? undefined);
+
+    if (desc === null && idx >= 0) {
+      const row = $el.querySelector(`[data-role='vh-row'][data-index='${idx}']`);
+      if (row) {
+        row.remove();
+
+        // Renumber + geser data-index
+        Array.from($el.querySelectorAll(`[data-role='vh-row']`)).forEach((r, i) => {
+          const no = r.querySelector(`[data-role='vh-no']`);
+          if (no) no.textContent = String(i + 1);
+
+          const oldIdx = Number(r.getAttribute('data-index'));
+          if (!Number.isNaN(oldIdx) && oldIdx > idx) {
+            r.setAttribute('data-index', String(oldIdx - 1));
+            const dcell = r.querySelector(`[data-role='vh-desc']`);
+            if (dcell) dcell.setAttribute('data-index', String(oldIdx - 1));
+          }
+        });
+      } else {
+        // Kalau karena timing/teleport baris belum ketemu, minta Livewire render ulang
+        $wire.$refresh();
+      }
+      return;
+    }
+
+    if (typeof desc !== 'undefined' && idx >= 0) {
+      const cell = $el.querySelector(`[data-role='vh-desc'][data-index='${idx}']`);
+      if (cell) cell.textContent = (String(desc).trim() !== '') ? String(desc) : '-';
+    }
+  "
 >
   <div class="mt-4">
     <h3 class="text-sm font-semibold">
@@ -156,9 +188,13 @@
               $displayRevision = 'REV' . str_pad($revNum, 2, '0', STR_PAD_LEFT);
             @endphp
 
-            <tr class="odd:bg-white even:bg-gray-50/30 hover:bg-gray-50/70">
-              <td class="px-3 py-2 border text-gray-500">{{ $i + 1 }}</td>
-
+            <tr
+              wire:key="lampiran-{{ $rec->getKey() }}-ver-{{ $originalIndex }}"
+              class="odd:bg-white even:bg-gray-50/30 hover:bg-gray-50/70"
+              data-role="vh-row"
+              data-index="{{ $originalIndex }}"
+            >
+              <td class="px-3 py-2 border text-gray-500" data-role="vh-no">{{ $i + 1 }}</td>
               <td class="px-3 py-2 border align-top whitespace-normal break-words break-all">
                 <div class="flex items-start gap-2 min-w-0">
                   <x-filament::icon icon="heroicon-m-document-text" class="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
@@ -173,7 +209,11 @@
               </td>
 
               <td class="px-3 py-2 border">{{ $displayRevision }}</td>
-              <td class="px-3 py-2 border">{{ ($v['description'] ?? '') !== '' ? $v['description'] : '-' }}</td>
+              <td class="px-3 py-2 border"
+                  data-role="vh-desc"
+                  data-index="{{ $originalIndex }}">
+                {{ ($v['description'] ?? '') !== '' ? $v['description'] : '-' }}
+              </td>
               <td class="px-3 py-2 border">{{ $fmtDate($v['uploaded_at'] ?? null) }}</td>
               <td class="px-3 py-2 border">{{ $fmtDate($v['replaced_at'] ?? null) }}</td>
               <td class="px-3 py-2 border whitespace-nowrap">{{ $sizeText }}</td>
@@ -182,11 +222,20 @@
               <td class="px-3 py-2 border text-center align-middle">
                 <div class="inline-flex items-center justify-center gap-1">
                   @if ($canDownload)
-                    <a href="{{ route('media.lampiran.version', ['lampiran' => $rec->getKey(), 'index' => $originalIndex]) }}"
-                       class="inline-flex items-center justify-center w-7 h-7 rounded-md hover:bg-gray-100"
-                       title="Download">
+                    <button type="button"
+                      class="inline-flex items-center justify-center w-7 h-7 rounded-md hover:bg-gray-100"
+                      title="Download"
+                      data-href-template="{{ route('media.lampiran.version', ['lampiran' => $rec->getKey(), 'index' => '___IDX___']) }}"
+                      @click="
+                        const row = $event.currentTarget.closest('[data-role=\'vh-row\']');
+                        const idx = Number(row?.getAttribute('data-index') ?? -1);
+                        if (idx >= 0) {
+                          const tpl = $event.currentTarget.dataset.hrefTemplate;
+                          window.location.href = tpl.replace('___IDX___', String(idx));
+                        }
+                      ">
                       <x-filament::icon icon="heroicon-m-arrow-down-tray" class="w-4 h-4 text-blue-600" />
-                    </a>
+                    </button>
                   @endif
 
                   @if ($canEdit)
@@ -194,10 +243,12 @@
                       class="inline-flex items-center justify-center w-7 h-7 rounded-md hover:bg-gray-100"
                       title="Edit deskripsi"
                       @click.stop.prevent="
+                        const row = $event.currentTarget.closest('[data-role=\'vh-row\']');
+                        const idx = Number(row?.getAttribute('data-index') ?? -1);
                         editVersion = {
                           lampiranId: {{ $rec->getKey() }},
-                          index: {{ $originalIndex }},
-                          name: @js($fileName),
+                          index: idx,
+                          name:  @js($fileName),
                           description: @js($v['description'] ?? '')
                         };
                         $dispatch('open-modal', { id: 'edit-lampiran-version-{{ $rec->getKey() }}' });
@@ -211,7 +262,9 @@
                       class="inline-flex items-center justify-center w-7 h-7 rounded-md hover:bg-gray-100"
                       title="Hapus versi"
                       @click.stop.prevent="
-                        toDeleteVersion = { lampiranId: {{ $rec->getKey() }}, index: {{ $originalIndex }}, name: @js($fileName) };
+                        const row = $event.currentTarget.closest('[data-role=\'vh-row\']');
+                        const idx = Number(row?.getAttribute('data-index') ?? -1);
+                        toDeleteVersion = { lampiranId: {{ $rec->getKey() }}, index: idx, name: @js($fileName) };
                         $dispatch('open-modal', { id: 'confirm-delete-lampiran-version-{{ $rec->getKey() }}' });
                       ">
                       <x-filament::icon icon="heroicon-m-trash" class="w-4 h-4 text-red-600" />
@@ -248,9 +301,9 @@
       <x-filament::button type="button" color="danger"
         x-on:click.stop.prevent="
           $dispatch('close-modal', { id: 'confirm-delete-lampiran-version-{{ $rec->getKey() }}' });
-          window.Livewire.find(pageId).call('onDeleteImmVersion', {
+          $wire.dispatch('lampiran-delete-version', {
             lampiranId: Number(toDeleteVersion.lampiranId ?? 0),
-            index:      Number(toDeleteVersion.index ?? -1)
+            index:      Number(toDeleteVersion.index ?? -1),
           });
         ">
         Hapus
@@ -285,17 +338,16 @@
 
       <x-filament::button color="primary"
         x-on:click.stop.prevent="
-          const payload = {
+          $wire.dispatch('lampiran-update-version-desc', {
             lampiranId:  Number(editVersion.lampiranId ?? 0),
             index:       Number(editVersion.index ?? -1),
-            description: String(editVersion.description ?? '')
-          };
-          window.Livewire.find(pageId).call('updateVersionDescription', payload);
+            description: String(editVersion.description ?? ''),
+          });
           $dispatch('close-modal', { id: 'edit-lampiran-version-{{ $rec->getKey() }}' });
         ">
         Simpan
       </x-filament::button>
-    </x-slot>
+    </x-slot> {{-- footer --}}
   </x-filament::modal>
 </div>
 @else

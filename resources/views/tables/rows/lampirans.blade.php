@@ -159,11 +159,13 @@ $tambahUrl  = (isset($record) && $record instanceof MBerkas)
                                 $hasChildren = $children->isNotEmpty();
                                 $rowKey      = $lampiran->id;
 
-                                $editUrl  = \App\Filament\Resources\LampiranResource::getUrl('edit', ['record' => $lampiran]);
-                                $canOpen  = ! $noFile;
-                                $openUrl  = $canOpen
+                                $editUrl   = \App\Filament\Resources\LampiranResource::getUrl('edit', ['record' => $lampiran]);
+                                $canManage = auth()->user()?->hasAnyRole(['Admin','Editor','Staff']) ?? false; // viewer = false
+                                $hasFile   = ! $noFile;
+
+                                $openUrl = $hasFile
                                     ? route('media.berkas.lampiran', ['berkas' => $lampiran->berkas_id, 'lampiran' => $lampiran->id])
-                                    : ($editUrl . '?missingFile=1');
+                                    : null;
                             @endphp
 
                             {{-- ROOT ROW --}}
@@ -230,13 +232,38 @@ $tambahUrl  = (isset($record) && $record instanceof MBerkas)
                                     @endif
                                 </td>
 
-                                <td class="px-4 py-3 whitespace-nowrap text-right">
+                                <td class="px-4 py-3 whitespace-nowrap text-left">
                                     <div class="inline-flex items-center gap-2">
-                                        <a href="{{ $openUrl }}" @if ($canOpen) target="_blank" rel="noopener" @endif
-                                           class="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-50 hover:border-blue-200 transition"
-                                           title="{{ $canOpen ? 'Buka file' : 'Tambahkan file lampiran' }}">
-                                            <span>📄</span><span>Buka</span>
-                                        </a>
+                                        @if ($hasFile && $canManage)
+                                            {{-- Ada file & role boleh buka --}}
+                                            <a href="{{ $openUrl }}" target="_blank" rel="noopener"
+                                            class="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-50 hover:border-blue-200 transition"
+                                            title="Buka file">
+                                                <span>📄</span><span>Buka</span>
+                                            </a>
+
+                                        @elseif ($hasFile && ! $canManage)
+                                            {{-- Ada file tapi viewer: tombol non-aktif --}}
+                                            <span class="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-400 cursor-not-allowed"
+                                                title="Khusus Admin/Editor/Staff">
+                                                <span>📄</span><span>Buka</span>
+                                            </span>
+
+                                        @elseif (! $hasFile && $canManage)
+                                            {{-- Tidak ada file & boleh mengelola: tawarkan tambah file --}}
+                                            <a href="{{ $editUrl }}?missingFile=1"
+                                            class="inline-flex items-center gap-2 rounded-md border border-amber-200 px-3 py-1.5 text-sm font-medium text-amber-700 hover:bg-amber-50 hover:border-amber-300 transition"
+                                            title="Tambahkan file lampiran">
+                                                <span>➕</span><span>Tambahkan file</span>
+                                            </a>
+
+                                        @else
+                                            {{-- Tidak ada file & viewer: non-aktif, ubah teks jadi 'File tidak tersedia' --}}
+                                            <span class="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-400 cursor-not-allowed"
+                                                title="File tidak tersedia">
+                                                <span>🚫</span><span>File tidak tersedia</span>
+                                            </span>
+                                        @endif
 
                                         @can('update', $lampiran)
                                         <a href="{{ $editUrl }}" class="ml-2 text-gray-400 hover:text-blue-600 shrink-0" title="Edit lampiran" @click.stop>

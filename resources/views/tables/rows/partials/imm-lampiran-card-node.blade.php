@@ -132,18 +132,15 @@ $roleCanDownload = Gate::allows('download-source');      // Admin/Editor/Staff =
 $fileSrcPath     = trim((string) ($lampiran->file_src ?? ''));
 $hasFileSrc      = ($fileSrcPath !== '');
 
-// (opsional legacy) anggap file non-PDF di kolom `file` sebagai “asli”
 $ext            = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
 $nonPdfInFile   = $hasFile && $ext !== 'pdf';
 
-// aktif kalau user berhak & (ada file_src ATAU file non-PDF lama)
 $canDownloadActive = $roleCanDownload && ($hasFileSrc || $nonPdfInFile);
 
-// alasan tooltip kalau ikon di-disable
 $dlDisabledReason = $roleCanDownload ? 'File asli belum diunggah' : 'Khusus Admin/Editor/Staff';
 
-// URL route unduh (controller-mu)
 $downloadSrcUrl = route('download.source', ['type' => 'imm-lampiran', 'id' => $lampiran->id]);
+$canOpen = $hasFile && (auth()->user()?->hasAnyRole(['Admin','Editor','Staff']) ?? false);
 @endphp
 
 @once
@@ -182,14 +179,18 @@ $downloadSrcUrl = route('download.source', ['type' => 'imm-lampiran', 'id' => $l
         @endif
 
         <div class="ml-auto flex items-center gap-2">
-        @if ($hasFile)
+        @if ($hasFile && $canOpen)
           <a href="{{ $openUrl }}" target="_blank" rel="noopener"
-            class="text-sm font-medium hover:underline" style="color:#2563eb"
-            @click.stop>Buka</a>
+            class="text-sm font-medium hover:underline" style="color:#2563eb" @click.stop>
+            Buka
+          </a>
+        @elseif ($hasFile)
+          <span class="text-sm text-gray-400 cursor-not-allowed" title="Khusus Admin/Editor/Staff">Buka</span>
         @elseif ($canUpdate)
           <a href="{{ $editUrl }}?missingFile=1"
-            class="text-sm font-medium hover:underline text-amber-700"
-            @click.stop>Tambahkan file</a>
+            class="text-sm font-medium hover:underline text-amber-700" @click.stop>
+            Tambahkan file
+          </a>
         @else
           <span class="text-sm text-gray-500">File belum tersedia</span>
         @endif

@@ -69,7 +69,10 @@ class ImmManualMutuResource extends Resource
                                     : null,
                                 shouldOpenInNewTab: true
                             )
-                            ->visible(fn ($record) => filled($record?->file))
+                            ->visible(fn ($record) =>
+                                filled($record?->file)
+                                && (auth()->user()?->hasAnyRole(['Admin','Editor','Staff']) ?? false)
+                            )
                     ),
 
                 Forms\Components\TagsInput::make('keywords')

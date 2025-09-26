@@ -119,6 +119,8 @@ $nonPdfInFile    = $hasFile && $ext !== 'pdf';
 $canDownloadActive = $roleCanDownload && ($hasFileSrc || $nonPdfInFile);
 $dlDisabledReason = $roleCanDownload ? 'File asli belum diunggah' : 'Khusus Admin/Editor/Staff';
 $downloadSrcUrl = route('download.source', ['type' => 'imm-lampiran', 'id' => $lampiran->id]);
+$canOpen = $hasFile && (auth()->user()?->hasAnyRole(['Admin','Editor','Staff']) ?? false);
+
 @endphp
 
 @once
@@ -174,10 +176,15 @@ $downloadSrcUrl = route('download.source', ['type' => 'imm-lampiran', 'id' => $l
         @endif
 
         <div class="ml-auto flex items-center gap-2">
-          @if ($hasFile)
-            <a href="{{ $openUrl }}" target="_blank" rel="noopener" class="text-sm font-medium hover:underline" style="color:#2563eb" @click.stop>Buka</a>
+          @if ($hasFile && $canOpen)
+            <a href="{{ $openUrl }}" target="_blank" rel="noopener"
+              class="text-sm font-medium hover:underline" style="color:#2563eb" @click.stop>Buka</a>
+          @elseif ($hasFile)
+            <span class="text-sm text-gray-400 cursor-not-allowed" title="Khusus Admin/Editor/Staff">Buka</span>
           @elseif ($canUpdate)
-            <a href="{{ $editUrl }}?missingFile=1" class="text-sm font-medium hover:underline text-amber-700" @click.stop>Tambahkan file</a>
+            <a href="{{ $editUrl }}?missingFile=1" class="text-sm font-medium hover:underline text-amber-700" @click.stop>
+              Tambahkan file
+            </a>
           @else
             <span class="text-sm text-gray-500">File belum tersedia</span>
           @endif

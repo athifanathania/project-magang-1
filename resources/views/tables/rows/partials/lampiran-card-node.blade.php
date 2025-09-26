@@ -162,6 +162,8 @@
     $showDlIcon     = Gate::forUser($currUser)->allows('download-source');   // Viewer => false
     $canDownloadAct = $showDlIcon && ($hasFileSrc || $nonPdfInFile);         // aktif kalau ada sumber
     $downloadSrcUrl = route('download.source', ['type' => 'lampiran', 'id' => $lampiran->id]);
+
+    $canOpen = $hasFile && (auth()->user()?->hasAnyRole(['Admin','Editor','Staff']) ?? false);
 @endphp
 
 @once
@@ -189,7 +191,7 @@
     wire:key="lampiran-card-{{ $lampiran->id }}"
     class="rounded-lg border p-3 mb-2 w-full max-w-full overflow-hidden {{ $indent }} {{ $hasFile ? 'cursor-pointer hover:bg-blue-50/50' : '' }}"
     x-data="{ open: false }"
-    data-file-url="{{ $hasFile ? $openUrl : '' }}"
+    data-file-url="{{ $canOpen ? $openUrl : '' }}"
     data-edit-url="{{ (!$hasFile && $canUpdate) ? ($editUrl . '?missingFile=1') : '' }}"
     @click="
         // cegah aksi lain di halaman ini
@@ -245,23 +247,24 @@
 
                     {{-- tombol kanan --}}
                     <div class="ml-auto flex items-center gap-2">
-                    @if ($hasFile)
+                    @if ($hasFile && $canOpen)
                         <a href="{{ $openUrl }}" target="_blank" rel="noopener"
-                        class="text-sm font-medium hover:underline" style="color:#2563eb"
-                        @click.stop>
-                            Buka
+                        class="text-sm font-medium hover:underline" style="color:#2563eb" @click.stop>
+                        Buka
                         </a>
+                    @elseif ($hasFile)
+                        <span class="text-sm font-medium text-gray-400 cursor-not-allowed"
+                            title="Khusus Admin/Editor/Staff">Buka</span>
                     @elseif ($canUpdate)
                         <a href="{{ $editUrl }}?missingFile=1"
-                        class="text-sm font-medium hover:underline text-amber-700"
-                        @click.stop>
-                            Tambahkan file
+                        class="text-sm font-medium hover:underline text-amber-700" @click.stop>
+                        Tambahkan file
                         </a>
                     @else
                         <button type="button"
                                 class="text-sm font-medium text-gray-500 hover:text-gray-700"
                                 @click.stop.prevent="$dispatch('show-no-file', { name: '{{ addslashes($lampiran->nama ?? 'Lampiran') }}' })">
-                            File belum tersedia
+                        File belum tersedia
                         </button>
                     @endif
 
