@@ -43,6 +43,8 @@ use Filament\Facades\Filament;
 use Illuminate\Support\Facades\Gate;
 use App\Filament\Support\RowClickViewForNonEditors;
 use App\Filament\Support\FileCell;
+use Illuminate\Validation\Rule;
+use Filament\Forms\Get;
 
 class BerkasResource extends Resource
 {
@@ -98,14 +100,33 @@ class BerkasResource extends Resource
 
                 TextInput::make('kode_berkas')
                     ->label('Part No')
-                    ->required(),
+                    ->required()
+                    ->rules(fn (Get $get, ?\App\Models\Berkas $record) => [
+                        Rule::unique('berkas', 'kode_berkas')
+                            ->where(fn ($q) => $q->where('detail', (string) $get('detail')))
+                            ->ignore($record?->getKey()),
+                    ])
+                    ->validationMessages([
+                        'unique' => 'Dokumen yang ditambahkan sudah tersedia di tabel Regular.',
+                    ]),
 
                 TextInput::make('nama')
                     ->label('Part Name')
                     ->required(),
+                
                 TextInput::make('detail')
+                    ->label('Detail Event')
                     ->placeholder('mis. Document')
-                    ->datalist(['Document', 'Part']),
+                    ->required()
+                    ->datalist(['Document', 'Part'])
+                    ->rules(fn (Get $get, ?\App\Models\Berkas $record) => [
+                        Rule::unique('berkas', 'detail')
+                            ->where(fn ($q) => $q->where('kode_berkas', (string) $get('kode_berkas')))
+                            ->ignore($record?->getKey()),
+                    ])
+                    ->validationMessages([
+                        'unique' => 'Dokumen yang ditambahkan sudah tersedia di tabel Regular.',
+                    ]),
 
                 TagsInput::make('keywords')
                     ->label('Kata Kunci Part')
@@ -224,7 +245,7 @@ class BerkasResource extends Resource
                             'class' => 'max-w-[18rem] whitespace-normal break-words',
                         ]),
                 TextColumn::make('detail')
-                    ->label('Detail')
+                    ->label('Detail Event')
                     ->wrap()
                     ->extraCellAttributes([
                         'class' => 'max-w-[14rem] whitespace-normal break-words',

@@ -82,4 +82,29 @@ class CreateImmLampiran extends CreateRecord
 
         return $data;
     }
+
+    private function isAuditContext(): bool
+    {
+        $type = request('documentable_type') ?: request('doc_type');
+        return $this->normalizeDocType($type) === \App\Models\ImmAuditInternal::class;
+    }
+
+    /** Ubah judul halaman (tab + breadcrumb leaf) */
+    public function getTitle(): string
+    {
+        return $this->isAuditContext() ? 'Create Temuan Audit' : 'Create Imm Lampiran';
+    }
+
+    // Biar H1 di halaman ikut sama
+    public function getHeading(): string
+    {
+        return $this->getTitle();
+    }
+
+    // Biar breadcrumb label terakhir ikut sama
+    public function getBreadcrumb(): string
+    {
+        return $this->getTitle();
+    }
+
 }
