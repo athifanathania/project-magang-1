@@ -141,6 +141,9 @@ $dlDisabledReason = $roleCanDownload ? 'File asli belum diunggah' : 'Khusus Admi
 
 $downloadSrcUrl = route('download.source', ['type' => 'imm-lampiran', 'id' => $lampiran->id]);
 $canOpen = $hasFile && (auth()->user()?->hasAnyRole(['Admin','Editor','Staff']) ?? false);
+
+$canDeleteStrict = auth()->user()?->hasRole('Admin') ?? false; // hanya Admin
+
 @endphp
 
 @once
@@ -228,7 +231,7 @@ $canOpen = $hasFile && (auth()->user()?->hasAnyRole(['Admin','Editor','Staff']) 
         </a>
 
         {{-- Tombol Delete --}}
-        @if (auth()->user()?->can('delete', $lampiran) || $canManageImm)
+        @if ($canDeleteStrict)
         <button type="button"
             class="ml-2 text-gray-400 hover:text-red-600"
             title="Hapus lampiran"

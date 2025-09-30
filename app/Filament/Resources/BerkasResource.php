@@ -101,14 +101,16 @@ class BerkasResource extends Resource
                 TextInput::make('kode_berkas')
                     ->label('Part No')
                     ->required()
-                    ->rules(fn (Get $get, ?\App\Models\Berkas $record) => [
-                        Rule::unique('berkas', 'kode_berkas')
-                            ->where(fn ($q) => $q->where('detail', (string) $get('detail')))
-                            ->ignore($record?->getKey()),
-                    ])
+                    ->rules(function (Get $get, ?\App\Models\Berkas $record) {
+                        $detail = mb_strtolower(trim((string) $get('detail')));
+                        return Rule::unique('berkas', 'kode_berkas')
+                            ->where(fn ($q) => $q->whereRaw('LOWER(TRIM(`detail`)) = ?', [$detail]))
+                            ->ignore($record?->getKey());
+                    })
                     ->validationMessages([
                         'unique' => 'Dokumen yang ditambahkan sudah tersedia di tabel Regular.',
                     ]),
+
 
                 TextInput::make('nama')
                     ->label('Part Name')
@@ -118,12 +120,13 @@ class BerkasResource extends Resource
                     ->label('Detail Event')
                     ->placeholder('mis. Document')
                     ->required()
-                    ->datalist(['Document', 'Part'])
-                    ->rules(fn (Get $get, ?\App\Models\Berkas $record) => [
-                        Rule::unique('berkas', 'detail')
-                            ->where(fn ($q) => $q->where('kode_berkas', (string) $get('kode_berkas')))
-                            ->ignore($record?->getKey()),
-                    ])
+                    ->datalist(['Document','Part'])
+                    ->rules(function (Get $get, ?\App\Models\Berkas $record) {
+                        $kode = mb_strtolower(trim((string) $get('kode_berkas')));
+                        return Rule::unique('berkas', 'detail')
+                            ->where(fn ($q) => $q->whereRaw('LOWER(TRIM(`kode_berkas`)) = ?', [$kode]))
+                            ->ignore($record?->getKey());
+                    })
                     ->validationMessages([
                         'unique' => 'Dokumen yang ditambahkan sudah tersedia di tabel Regular.',
                     ]),
@@ -381,7 +384,7 @@ class BerkasResource extends Resource
                         ->label('')
                         ->icon('heroicon-m-trash')
                         ->tooltip('Hapus')
-                        ->visible(fn () => auth()->user()?->hasAnyRole(['Admin', 'Editor']) ?? false),
+                        ->visible(fn () => auth()->user()?->hasRole('Admin') ?? false),
 
                     Action::make('downloadSource')
                         ->label('')
@@ -408,7 +411,7 @@ class BerkasResource extends Resource
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make()
-                        ->visible(fn () => auth()->user()?->hasAnyRole(['Admin', 'Editor']) ?? false),
+                        ->visible(fn () => auth()->user()?->hasRole('Admin') ?? false),
                 ]),
             ]);
     }
@@ -451,6 +454,16 @@ class BerkasResource extends Resource
     public static function canCreate(): bool
     {
         return auth()->user()?->can('berkas.create') ?? false;
+    }
+
+    public static function canDelete($record): bool
+    {
+        return auth()->user()?->hasRole('Admin') ?? false;
+    }
+
+    public static function canDeleteAny(): bool
+    {
+        return auth()->user()?->hasRole('Admin') ?? false;
     }
 
     public static function shouldRegisterNavigation(): bool

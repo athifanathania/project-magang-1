@@ -247,6 +247,8 @@ class Lampiran extends Model
 
     public function updateVersionDescription(int $index, string $description): bool
     {
+        abort_unless(auth()->user()?->hasRole('Admin'), 403);
+
         $desc = trim($description);
 
         $raw = $this->getAttribute('file_versions');

@@ -189,7 +189,7 @@ class ImmProsedurResource extends Resource
                 Tables\Actions\EditAction::make()->label('')->icon('heroicon-m-pencil')->tooltip('Edit')
                     ->visible(fn()=>auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false),
                 Tables\Actions\DeleteAction::make()->label('')->icon('heroicon-m-trash')->tooltip('Hapus')
-                    ->visible(fn()=>auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false),
+                    ->visible(fn()=>auth()->user()?->hasRole('Admin') ?? false),
                 Action::make('downloadSource')
                     ->label('')
                     ->icon('heroicon-o-arrow-down-tray')
@@ -205,7 +205,7 @@ class ImmProsedurResource extends Resource
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make()
-                        ->visible(fn () => auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false),
+                        ->visible(fn () => auth()->user()?->hasRole('Admin') ?? false),
                 ]),
             ]);
     }
@@ -223,5 +223,16 @@ class ImmProsedurResource extends Resource
     {
         return auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false;
     }
+
+    public static function canDeleteAny(): bool
+    {
+        return auth()->user()?->hasRole('Admin') ?? false;
+    }
+
+    public static function canDelete($record): bool
+    {
+        return auth()->user()?->hasRole('Admin') ?? false;
+    }
+
 
 }

@@ -10,6 +10,8 @@ trait HandlesLampiran
 {
     public function handleDeleteLampiranVersion(int $lampiranId, int $index): void
     {
+        abort_unless(auth()->user()?->hasRole('Admin'), 403);
+
         if (! $lampiranId || $index < 0) {
             Notification::make()->title('Payload hapus versi tidak valid.')->danger()->send();
             return;
@@ -85,6 +87,8 @@ trait HandlesLampiran
     // Kompat lama (boleh tetap, tidak mengganggu)
     public function onDeleteImmVersion(array $payload): void
     {
+        abort_unless(auth()->user()?->hasRole('Admin'), 403);
+
         $this->handleDeleteLampiranVersion(
             (int)($payload['lampiranId'] ?? $payload['id'] ?? 0),
             (int)($payload['index'] ?? -1),
@@ -93,6 +97,8 @@ trait HandlesLampiran
 
     public function updateVersionDescription(array $payload): void
     {
+        abort_unless(auth()->user()?->hasRole('Admin'), 403);
+
         $this->handleUpdateLampiranVersionDesc(
             (int)($payload['lampiranId'] ?? $payload['id'] ?? 0),
             (int)($payload['index'] ?? -1),

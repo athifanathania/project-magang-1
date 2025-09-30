@@ -42,10 +42,10 @@
     // tampilkan terbaru dulu
     $versions = $all->reverse()->values();
 
-    $canEdit     = auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false;
-    $canDelete   = $canEdit;
-    $canDownload = $canEdit;             
-    $showActionsCol = $canEdit;
+    $canEdit       = auth()->user()?->hasRole('Admin') ?? false;                    // hanya Admin
+    $canDelete     = $canEdit;                                                      // hanya Admin
+    $canDownload   = auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false;      // Admin & Editor boleh download
+    $showActionsCol= $canDownload || $canEdit || $canDelete;
 
     $tz = auth()->user()->timezone ?? config('app.timezone');
     if (blank($tz) || strtoupper($tz) === 'UTC') $tz = 'Asia/Jakarta';
@@ -202,7 +202,8 @@
               @if ($showActionsCol)
               <td class="px-3 py-2 border text-center align-middle">
                 <div class="inline-flex items-center justify-center gap-1">
-                  {{-- Download / Edit / Hapus hanya untuk VERSI NON-AKTIF --}}
+
+                  {{-- Download: Admin & Editor --}}
                   @if ($canDownload)
                     <a href="{{ route('media.imm.version', ['id' => $rec->getKey(), 'index' => $originalIndex]) }}"
                       class="inline-flex items-center justify-center w-7 h-7 rounded-md hover:bg-gray-100" title="Download">
@@ -210,6 +211,7 @@
                     </a>
                   @endif
 
+                  {{-- Edit deskripsi: hanya Admin --}}
                   @if ($canEdit)
                     <button type="button"
                       class="inline-flex items-center justify-center w-7 h-7 rounded-md hover:bg-gray-100"
@@ -227,6 +229,7 @@
                     </button>
                   @endif
 
+                  {{-- Hapus versi: hanya Admin & tidak untuk versi aktif --}}
                   @if ($canDelete && ! $isActive)
                     <button type="button"
                       class="inline-flex items-center justify-center w-7 h-7 rounded-md hover:bg-gray-100"
@@ -238,6 +241,7 @@
                       <x-filament::icon icon="heroicon-m-trash" class="w-4 h-4 text-red-600"/>
                     </button>
                   @endif
+
                 </div>
               </td>
               @endif
@@ -248,6 +252,7 @@
     </div>
   </div>
 
+  @if ($canDelete)
   <x-filament::modal id="confirm-delete-imm-version-{{ $rec->getKey() }}" width="xl" wire:ignore.self>
     <x-slot name="heading">Hapus versi lampiran?</x-slot>
 
@@ -278,7 +283,9 @@
       </x-filament::button>
     </x-slot>
   </x-filament::modal>
+  @endif
 
+  @if ($canEdit)
   @php($heading = null) @php($description = null) @php($footer = null)
   <x-filament::modal id="edit-imm-version-{{ $rec->getKey() }}" width="2xl" wire:ignore.self>
     <x-slot name="heading">Edit deskripsi revisi</x-slot>
@@ -320,6 +327,7 @@
       </x-filament::button>
     </x-slot>
   </x-filament::modal>
+  @endif
 </div>
 @else
   <p class="text-sm text-gray-500 mt-2">Belum ada riwayat revisi.</p>

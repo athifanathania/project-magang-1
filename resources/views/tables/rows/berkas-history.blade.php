@@ -17,10 +17,15 @@ if ($idxCur !== false && $idxCur !== $all->count() - 1) {
 // Tampilan: baru -> tua
 $versions = $all->reverse()->values();
 
-$canEdit     = auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false;
-$canDelete   = $canEdit;
-$canDownload = $canEdit;  
-$showActionsCol = $canEdit || $canDelete || $canDownload; 
+$isAdmin  = auth()->user()?->hasRole('Admin')  ?? false;
+$isEditor = auth()->user()?->hasRole('Editor') ?? false;
+
+/** Akses per aksi */
+$canDownload = $isAdmin || $isEditor; 
+$canEdit     = $isAdmin;              
+$canDelete   = $isAdmin;              
+
+$showActionsCol = $canDownload || $canEdit || $canDelete;
 
 $tz = auth()->user()->timezone ?? config('app.timezone') ?: 'Asia/Jakarta';
 $fmtDate = function ($d) use ($tz) {
@@ -193,6 +198,7 @@ $extColor = fn ($ext) => match (strtolower((string)$ext)) {
   </div>
 
   {{-- Modal HAPUS --}}
+  @if ($isAdmin)
   <x-filament::modal id="confirm-del-berkas-doc-ver-{{ $rec->getKey() }}" width="md" wire:ignore.self>
     <x-slot name="heading">Hapus versi?</x-slot>
     <x-slot name="description">
@@ -238,6 +244,7 @@ $extColor = fn ($ext) => match (strtolower((string)$ext)) {
       </x-filament::button>
     </x-slot>
   </x-filament::modal>
+  @endif
 </div>
 @else
   <p class="text-sm text-gray-500 mt-2">Belum ada riwayat.</p>

@@ -10,6 +10,8 @@ trait HandlesImmLampiran
 {
     public function handleDeleteImmLampiran(int $lampiranId, int $docId): void
     {
+        abort_unless(auth()->user()?->hasRole('Admin'), 403);
+
         $lampiran = ImmLampiran::query()
             ->whereKey($lampiranId)
             ->where('documentable_id', $docId)
@@ -27,6 +29,8 @@ trait HandlesImmLampiran
 
     public function handleDeleteImmLampiranVersion(int $lampiranId, int $index): void
     {
+        abort_unless(auth()->user()?->hasRole('Admin'), 403);
+
         if (! $lampiranId || $index < 0) {
             Notification::make()->title('Payload hapus versi tidak valid.')->danger()->send();
             return;
@@ -52,6 +56,8 @@ trait HandlesImmLampiran
     // === DIPANGGIL LANGSUNG DARI JS: window.Livewire.find(pageId).call('onDeleteImmVersion', { lampiranId, index })
     public function onDeleteImmVersion(array $payload): void
     {
+        abort_unless(auth()->user()?->hasRole('Admin'), 403);
+
         $id  = (int)($payload['lampiranId'] ?? $payload['id'] ?? 0);
         $idx = (int)($payload['index'] ?? -1);
 
@@ -65,6 +71,8 @@ trait HandlesImmLampiran
 
     public function updateVersionDescription(array $payload): void
     {
+        abort_unless(auth()->user()?->hasRole('Admin'), 403);
+   
         $id   = (int)($payload['lampiranId'] ?? $payload['id'] ?? 0);
         $idx  = (int)($payload['index'] ?? -1);
         $desc = trim((string)($payload['description'] ?? ''));

@@ -40,10 +40,13 @@
     // tampilkan terbaru dulu
     $versions = $all->reverse()->values();
 
-    $canEdit     = auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false;
-    $canDelete   = $canEdit;
-    $canDownload = $canEdit;
-    $showActionsCol = $canEdit;
+    $isAdmin   = auth()->user()?->hasRole('Admin')   ?? false;
+    $isEditor  = auth()->user()?->hasRole('Editor')  ?? false;
+
+    $canEdit     = $isAdmin;                 // hanya Admin
+    $canDelete   = $isAdmin;                 // hanya Admin
+    $canDownload = $isAdmin || $isEditor;    // Editor boleh download
+    $showActionsCol = $canEdit || $canDelete || $canDownload;
 
     $tz = auth()->user()->timezone ?? config('app.timezone') ?: 'Asia/Jakarta';
     $fmtDate = function ($d) use ($tz) {
@@ -282,6 +285,7 @@
   </div>
 
   {{-- Konfirmasi hapus versi --}}
+  @if ($canDelete)
   <x-filament::modal id="confirm-delete-lampiran-version-{{ $rec->getKey() }}" width="md" wire:ignore.self>
     <x-slot name="heading">Hapus versi lampiran?</x-slot>
     <x-slot name="description">
@@ -310,8 +314,10 @@
       </x-filament::button>
     </x-slot>
   </x-filament::modal>
+  @endif
 
   {{-- Modal edit deskripsi --}}
+  @if ($canEdit)
   @php($heading=null) @php($description=null) @php($footer=null)
   <x-filament::modal id="edit-lampiran-version-{{ $rec->getKey() }}" width="2xl" wire:ignore.self>
     <x-slot name="heading">Edit deskripsi revisi</x-slot>
@@ -349,6 +355,7 @@
       </x-filament::button>
     </x-slot> {{-- footer --}}
   </x-filament::modal>
+  @endif
 </div>
 @else
   <p class="text-sm text-gray-500 mt-2">Belum ada riwayat revisi.</p>

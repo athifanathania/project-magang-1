@@ -164,6 +164,11 @@
     $downloadSrcUrl = route('download.source', ['type' => 'lampiran', 'id' => $lampiran->id]);
 
     $canOpen = $hasFile && (auth()->user()?->hasAnyRole(['Admin','Editor','Staff']) ?? false);
+
+    $isAdmin = auth()->user()?->hasRole('Admin') ?? false;
+
+    // tombol hapus hanya untuk Admin + lolos policy
+    $canDeleteBtn = $isAdmin && (auth()->user()?->can('delete', $lampiran) ?? false);
 @endphp
 
 @once
@@ -301,12 +306,12 @@
                     </a>
                     @endcan
 
-                    @can('delete', $lampiran)
+                    @if ($canDeleteBtn)
                     <button type="button" class="ml-2 text-gray-400 hover:text-red-600" title="Hapus lampiran"
                             @click.stop="$dispatch('set-lampiran-to-delete', { id: {{ $lampiran->id }}, berkasId: {{ $lampiran->berkas_id }} })">
                         <x-filament::icon icon="heroicon-m-trash" class="w-4 h-4" />
                     </button>
-                    @endcan
+                    @endif
 
                 </div>
 

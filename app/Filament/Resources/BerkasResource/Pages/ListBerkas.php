@@ -51,6 +51,8 @@ class ListBerkas extends ListRecords
     /** Dipanggil dari blade via $wire.handleDeleteLampiran(...) */
     public function handleDeleteLampiran(int $lampiranId, int $berkasId, string $source = 'panel'): void
     {
+        abort_unless(auth()->user()?->hasRole('Admin'), 403);
+
         $lampiran = Lampiran::query()
             ->whereKey($lampiranId)
             ->where('berkas_id', $berkasId)

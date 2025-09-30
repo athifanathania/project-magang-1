@@ -189,6 +189,8 @@ trait HasImmVersions
 
     public function updateVersionDescription(int $index, string $description): bool
     {
+        abort_unless(auth()->user()?->hasRole('Admin'), 403);
+
         $versions = $this->versionsList();
         if ($index < 0 || $index >= $versions->count()) return false;
 

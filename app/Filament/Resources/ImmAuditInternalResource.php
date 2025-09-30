@@ -90,11 +90,11 @@ class ImmAuditInternalResource extends Resource
                 EditAction::make()
                     ->label('')
                     ->icon('heroicon-m-pencil')
-                    ->visible(fn() => auth()->user()?->hasAnyRole(['Admin']) ?? false),
+                    ->visible(fn() => auth()->user()?->hasRole('Admin') ?? false),
                 DeleteAction::make()
                     ->label('')
                     ->icon('heroicon-m-trash')
-                    ->visible(fn() => auth()->user()?->hasAnyRole(['Admin']) ?? false),
+                    ->visible(fn() => auth()->user()?->hasRole('Admin') ?? false),
             ]);
     }
 

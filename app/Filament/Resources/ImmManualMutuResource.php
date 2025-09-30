@@ -195,7 +195,7 @@ class ImmManualMutuResource extends Resource
                 Tables\Actions\EditAction::make()->label('')->icon('heroicon-m-pencil')->tooltip('Edit')
                     ->visible(fn()=>auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false),
                 Tables\Actions\DeleteAction::make()->label('')->icon('heroicon-m-trash')->tooltip('Hapus')
-                    ->visible(fn()=>auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false),
+                    ->visible(fn()=>auth()->user()?->hasRole('Admin') ?? false),
                 Action::make('downloadSource')
                     ->label('')
                     ->icon('heroicon-o-arrow-down-tray')
@@ -212,7 +212,7 @@ class ImmManualMutuResource extends Resource
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make()
-                        ->visible(fn () => auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false),
+                        ->visible(fn () => auth()->user()?->hasRole('Admin') ?? false),
                 ]),
             ]);
     }
@@ -229,6 +229,16 @@ class ImmManualMutuResource extends Resource
     public static function canCreate(): bool
     {
         return auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false;
+    }
+
+    public static function canDeleteAny(): bool
+    {
+        return auth()->user()?->hasRole('Admin') ?? false;
+    }
+
+    public static function canDelete($record): bool
+    {
+        return auth()->user()?->hasRole('Admin') ?? false;
     }
 
 }
