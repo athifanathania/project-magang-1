@@ -175,18 +175,31 @@ class ImmLampiranResource extends Resource
 
                 // Deadline (khusus Audit)
                 DatePicker::make('deadline_at')
-                    ->label('Deadline Upload')->native(false)
-                    ->displayFormat('d/M/Y')->closeOnDateSelection()
+                    ->label('Deadline Upload')
+                    ->native(false)
+                    ->displayFormat('d/M/Y')
+                    ->closeOnDateSelection()
                     ->helperText('Batas waktu departemen mengunggah file')
-                    ->visible(fn (Get $get, ?ImmLampiran $record) =>
-                        $record && str_contains(ltrim((string)($record->documentable_type ?? ''), '\\'), 'ImmAuditInternal')
-                    )
+                    ->visible(function (Get $get, ?ImmLampiran $record) {
+                        $type = $record?->documentable_type
+                            ?: $get('documentable_type')
+                            ?: request('documentable_type')
+                            ?: request('doc_type');
+
+                        $type = ltrim((string) $type, '\\');
+                        $short = Str::afterLast($type, '\\');   // handle FQCN "App\Models\ImmAuditInternal"
+                        return $short === 'ImmAuditInternal';
+                    })
                     ->nullable()
                     ->disabled(fn (?ImmLampiran $record, string $operation) =>
-                        $operation === 'view' || $isAuditLocked($record)
+                        $operation === 'view' || (
+                            $record
+                            && Str::afterLast(ltrim((string)($record->documentable_type ?? ''), '\\'), '\\') === 'ImmAuditInternal'
+                            && ! (auth()->user()?->hasRole('Admin') ?? false)
+                        )
                     )
                     ->dehydrated(fn (?ImmLampiran $record, string $operation) =>
-                        $operation !== 'view' && ! $isAuditLocked($record)
+                        $operation !== 'view'
                     ),
 
                 // File utama: tetap editable
