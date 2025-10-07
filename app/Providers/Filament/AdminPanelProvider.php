@@ -30,6 +30,7 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->brandName(config('app.name'))
+            ->sidebarWidth('18rem')
             ->login(CustomLogin::class)
             ->colors(['primary' => Color::Blue])
 
