@@ -13,6 +13,28 @@ trait HasBerkasVersions
         return 'private';
     }
 
+    /** Helper logging yang aman utk CLI (request() bisa null). */
+    protected function logVersionActivity(string $event, string $message, array $properties = []): void
+    {
+        try {
+            activity()
+                ->useLog('web')
+                ->causedBy(optional(auth())->user())
+                ->performedOn($this)
+                ->event($event)
+                ->withProperties($properties + [
+                    'model'      => static::class,
+                    'model_id'   => $this->getKey(),
+                    'route'      => optional(request())->path(),
+                    'ip'         => optional(request())->ip(),
+                    'user_agent' => substr((string) optional(request())->userAgent(), 0, 500),
+                ])
+                ->log($message);
+        } catch (\Throwable $e) {
+            // jangan ganggu alur simpan file/DB
+        }
+    }
+
     /** Versi sebagai collection (selalu array). */
     public function versionsList(): \Illuminate\Support\Collection
     {
@@ -108,6 +130,15 @@ trait HasBerkasVersions
         $this->dokumen          = $path;
         $this->save();
 
+        $this->logVersionActivity('version_add', 'Tambah versi dokumen dari upload', [
+            'revision'    => $new['revision'] ?? null,
+            'filename'    => $new['filename'] ?? null,
+            'file_path'   => $new['file_path'] ?? null,
+            'file_ext'    => $new['file_ext'] ?? null,
+            'file_size'   => $new['file_size'] ?? null,
+            'description' => $new['description'] ?? null,
+        ]);
+        
         return $new;
     }
 
@@ -149,6 +180,11 @@ trait HasBerkasVersions
                 $this->dokumen_versions = $versions->all();
                 $this->dokumen          = $path;
                 $this->save();
+                $this->logVersionActivity('version_reopen', 'Buka ulang versi aktif (path sama)', [
+                    'revision'  => $last['revision'] ?? null,
+                    'file_path' => $last['file_path'] ?? null,
+                ]);
+
                 return $last;
             }
 
@@ -187,6 +223,15 @@ trait HasBerkasVersions
         $this->dokumen_versions = $versions->all();
         $this->dokumen          = $path;
         $this->save();
+
+        $this->logVersionActivity('version_replace', 'Ganti versi dokumen (add from path)', [
+            'revision'     => $newVersion['revision'] ?? null,
+            'filename'     => $newVersion['filename'] ?? null,
+            'file_path'    => $newVersion['file_path'] ?? null,
+            'file_ext'     => $newVersion['file_ext'] ?? null,
+            'file_size'    => $newVersion['file_size'] ?? null,
+            'description'  => $newVersion['description'] ?? null,
+        ]);
 
         return $newVersion;
     }
@@ -234,6 +279,12 @@ trait HasBerkasVersions
         $this->dokumen_versions = $versions->all();
         $this->save();
 
+        $this->logVersionActivity('version_delete', 'Hapus versi dokumen', [
+            'deleted_index' => $index,
+            'deleted_path'  => $removed['file_path'] ?? null,
+            'fallback_path' => $this->dokumen ?? null,
+        ]);
+
         return true;
     }
 
@@ -248,6 +299,11 @@ trait HasBerkasVersions
 
         $this->dokumen_versions = $versions->values()->all();
         $this->save();
+
+        $this->logVersionActivity('version_desc_update', 'Ubah deskripsi revisi dokumen', [
+            'index'       => $index,
+            'description' => trim($description),
+        ]);
 
         return true;
     }

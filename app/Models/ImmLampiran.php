@@ -5,10 +5,28 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\{BelongsTo, HasMany, MorphTo};
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Validation\ValidationException;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class ImmLampiran extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, LogsActivity;
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->useLogName('web')
+            ->logOnly([
+                'nama','file','keywords','parent_id',
+                'documentable_type','documentable_id',
+                'deadline_at',
+            ])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs()
+            ->setDescriptionForEvent(fn (string $e) => "Lampiran Imm {$e}");
+    }
+
+
     protected ?string $oldFilePath = null;
     protected ?string $oldUploadedAt = null;
 
@@ -105,7 +123,7 @@ class ImmLampiran extends Model
 
         // 4) Tambah entry versi (untuk file lama yang baru dipindah)
         $versions[] = [
-            'path'        => $newPath,
+            'file_path' => $newPath,
             'filename'    => basename($oldPath),
             'size'        => $disk->size($newPath),
             'ext'         => pathinfo($newPath, PATHINFO_EXTENSION),
@@ -151,8 +169,8 @@ class ImmLampiran extends Model
         // --- Hapus file fisik (jika ada) lalu keluarkan dari array
         $disk = \Storage::disk('private');
         $v    = $versions[$index] ?? null;
-        if (is_array($v) && !empty($v['path']) && $disk->exists($v['path'])) {
-            $disk->delete($v['path']);
+        if (is_array($v) && !empty($v['file_path']) && $disk->exists($v['file_path'])) {
+            $disk->delete($v['file_path']);
         }
         array_splice($versions, $index, 1); // reindex otomatis 0..n-2
 

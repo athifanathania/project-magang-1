@@ -5,10 +5,26 @@ namespace App\Models;
 use App\Models\Concerns\HasImmVersions;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\ImmLampiran;
+use Spatie\Activitylog\Traits\LogsActivity;
+use Spatie\Activitylog\LogOptions;
 
 class ImmInstruksiStandar extends Model
 {
-    use HasImmVersions;
+    use HasImmVersions, LogsActivity;
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->useLogName('web')
+            ->logOnly([
+                'nama_dokumen','file','keywords','effective_at','expires_at','file_src',
+            ])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs()
+            ->setDescriptionForEvent(fn (string $e) => "Instruksi Standar {$e}");
+    }
+
+
 
     protected $table = 'imm_instruksi_standar';
 
@@ -18,7 +34,7 @@ class ImmInstruksiStandar extends Model
         'keywords'     => 'array',
         'file_versions'=> 'array',
         'effective_at' => 'date',
-        'expires_at'   => 'date',
+        // 'expires_at'   => 'date',
         'file_src_versions'    => 'array',
     ];
 

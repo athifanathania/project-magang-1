@@ -6,10 +6,22 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Database\Eloquent\Casts\Attribute;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class Lampiran extends Model
 {
-    use HasFactory;
+    use HasFactory, LogsActivity;
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->useLogName('web')
+            ->logOnly(['nama','file','keywords','parent_id','berkas_id'])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs()
+            ->setDescriptionForEvent(fn (string $e) => "Lampiran {$e}");
+    }
 
     protected $guarded = [];
 
@@ -189,7 +201,7 @@ class Lampiran extends Model
         catch (\Throwable) {}
 
         $versions[] = [
-            'path'        => $newPath,
+            'file_path'        => $newPath,
             'filename'    => basename($oldPath),
             'size'        => $disk->size($newPath),
             'ext'         => pathinfo($newPath, PATHINFO_EXTENSION),
@@ -217,9 +229,12 @@ class Lampiran extends Model
         $versions = [];
         $meta     = [];
         foreach ($raw as $k => $v) {
-            $isNumeric = is_int($k) || ctype_digit((string)$k);
+            $isNumeric = is_int($k) || ctype_digit((string) $k);
             if ($isNumeric) {
-                if (is_array($v) && (isset($v['file_path']) || isset($v['path']) || isset($v['filename']))) {
+                if (
+                    is_array($v) &&
+                    (isset($v['file_path']) || isset($v['path']) || isset($v['filename']))
+                ) {
                     $versions[] = $v;
                 }
             } else {
@@ -231,8 +246,8 @@ class Lampiran extends Model
 
         $disk = \Storage::disk('private');
         $v    = $versions[$index] ?? null;
-        if (is_array($v) && !empty($v['path']) && $disk->exists($v['path'])) {
-            $disk->delete($v['path']);
+        if (is_array($v) && !empty($v['file_path']) && $disk->exists($v['file_path'])) {
+            $disk->delete($v['file_path']);
         }
         array_splice($versions, $index, 1);
 

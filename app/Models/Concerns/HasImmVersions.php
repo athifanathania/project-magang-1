@@ -16,6 +16,28 @@ trait HasImmVersions
         return 'private';
     }
 
+    protected function logVersionActivity(string $event, string $message, array $properties = []): void
+    {
+        try {
+            activity()
+                ->useLog('web')
+                ->causedBy(optional(auth())->user())
+                ->performedOn($this)
+                ->event($event)
+                ->withProperties($properties + [
+                    'model'      => static::class,
+                    'model_id'   => $this->getKey(),
+                    'route'      => optional(request())->path(),
+                    'ip'         => optional(request())->ip(),
+                    'user_agent' => substr((string) optional(request())->userAgent(), 0, 500),
+                ])
+                ->log($message);
+        } catch (\Throwable $e) {
+            // no-op
+        }
+    }
+
+
     /** Folder dasar tiap model; override di masing-masing model. */
     abstract protected static function storageBaseDir(): string;
 
@@ -133,20 +155,27 @@ trait HasImmVersions
 
         $versions->push($newVersion);
 
-        // sync ke kolom model
+        // sinkron kolom aktif
         $this->file_versions = $versions->all();
         $this->file          = $path;
-        $this->revision      = $revCode;   
+        $this->revision      = $revCode;
         if (blank($this->effective_at)) {
             $this->effective_at = now()->toDateString();
         }
-
         $this->save();
+
+        $this->logVersionActivity('version_add', 'Tambah versi IMM dari upload', [
+            'revision'    => $newVersion['revision'] ?? null,
+            'filename'    => $newVersion['filename'] ?? null,
+            'file_path'   => $newVersion['file_path'] ?? null,
+            'file_ext'    => $newVersion['file_ext'] ?? null,
+            'file_size'   => $newVersion['file_size'] ?? null,
+            'description' => $newVersion['description'] ?? null,
+        ]);
 
         return $newVersion;
     }
 
-    // GANTI seluruh method ini
     public function deleteVersionAtIndex(int $index): bool
     {
         $versions = $this->versionsList();
@@ -163,6 +192,13 @@ trait HasImmVersions
             $this->revision = null;
             $this->file_versions = [];
             $this->save();
+
+            $this->logVersionActivity('version_delete', 'Hapus versi terakhir IMM', [
+                'deleted_index' => $index,
+                'deleted_path'  => $removed['file_path'] ?? null,
+                'fallback_path' => null,
+            ]);
+
             return true;
         }
 
@@ -184,6 +220,12 @@ trait HasImmVersions
         $this->file_versions = $versions->all();
         $this->save();
 
+        $this->logVersionActivity('version_delete', 'Hapus versi IMM', [
+            'deleted_index' => $index,
+            'deleted_path'  => $removed['file_path'] ?? null,
+            'fallback_path' => $this->file ?? null,
+        ]);
+
         return true;
     }
 
@@ -200,6 +242,11 @@ trait HasImmVersions
 
         $this->file_versions = $versions->values()->all();
         $this->save();
+
+        $this->logVersionActivity('version_desc_update', 'Ubah deskripsi revisi IMM', [
+            'index'       => $index,
+            'description' => trim($description),
+        ]);
 
         return true;
     }

@@ -5,10 +5,24 @@ namespace App\Models;
 use App\Models\Concerns\HasImmVersions;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\ImmLampiran;
+use Spatie\Activitylog\Traits\LogsActivity;
+use Spatie\Activitylog\LogOptions;
 
 class ImmProsedur extends Model
 {
-    use HasImmVersions;
+    use HasImmVersions, LogsActivity;
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->useLogName('web')
+            ->logOnly([
+                'nama_dokumen','file','keywords','effective_at','expires_at','file_src',
+            ])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs()
+            ->setDescriptionForEvent(fn (string $e) => "Prosedur {$e}");
+    }
 
     protected $table = 'imm_prosedur';
 
@@ -18,7 +32,7 @@ class ImmProsedur extends Model
         'keywords'     => 'array',
         'file_versions'=> 'array',
         'effective_at' => 'date',
-        'expires_at'   => 'date',
+        // 'expires_at'   => 'date',
         'file_src_versions'    => 'array',
     ];
 
