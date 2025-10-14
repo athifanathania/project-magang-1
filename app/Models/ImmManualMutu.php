@@ -7,10 +7,11 @@ use Illuminate\Database\Eloquent\Model;
 use App\Models\ImmLampiran;
 use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
+use App\Models\Concerns\HumanReadableActivity;
 
 class ImmManualMutu extends Model
 {
-    use HasImmVersions, LogsActivity;
+    use HasImmVersions, LogsActivity, HumanReadableActivity;
 
     public function getActivitylogOptions(): LogOptions
     {

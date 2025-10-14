@@ -7,10 +7,19 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Validation\ValidationException;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
+use Spatie\Activitylog\Models\Activity;
+use App\Models\Concerns\HumanReadableActivity;
 
 class ImmLampiran extends Model
 {
-    use SoftDeletes, LogsActivity;
+    use SoftDeletes, LogsActivity, HumanReadableActivity {
+        HumanReadableActivity::tapActivity as private tapActivityLabel;
+    }
+
+    protected function belongsToAuditInternal(): bool
+    {
+        return class_basename((string) $this->documentable_type) === 'ImmAuditInternal';
+    }
 
     public function getActivitylogOptions(): LogOptions
     {
@@ -18,14 +27,46 @@ class ImmLampiran extends Model
             ->useLogName('web')
             ->logOnly([
                 'nama','file','keywords','parent_id',
-                'documentable_type','documentable_id',
-                'deadline_at',
+                'documentable_type','documentable_id','deadline_at',
             ])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs()
-            ->setDescriptionForEvent(fn (string $e) => "Lampiran Imm {$e}");
+            ->setDescriptionForEvent(function (string $event) {
+                return $this->belongsToAuditInternal()
+                    ? "List temuan audit {$event}"
+                    : "Lampiran Imm {$event}";
+            });
     }
 
+    public function tapActivity(Activity $activity, string $event): void
+    {
+        // 1) Arahkan subject ke induk Audit Internal bila perlu
+        if ($this->belongsToAuditInternal()) {
+            $activity->subject_type = \App\Models\ImmAuditInternal::class;
+            $activity->subject_id   = $this->documentable_id;
+        }
+
+        // 2) Set object_label yang human-readable
+        $props = collect($activity->properties ?? []);
+
+        if ($activity->subject_type === \App\Models\ImmAuditInternal::class) {
+            // Bangun label dari subjek (dokumen audit), bukan dari lampiran.
+            $parent = \App\Models\ImmAuditInternal::find($activity->subject_id);
+            $base   = class_basename(\App\Models\ImmAuditInternal::class);
+
+            // Ambil “nama” yang paling masuk akal di model induk
+            $name = $parent->nama
+                ?? $parent->nama_dokumen
+                ?? "{$base}#{$activity->subject_id}";
+
+            $label = "{$base}: {$name}";
+        } else {
+            // Fallback: pakai helper dari trait (lampiran biasa, dll.)
+            $label = $this->activityObjectLabel();
+        }
+
+        $activity->properties = $props->put('object_label', $label);
+    }
 
     protected ?string $oldFilePath = null;
     protected ?string $oldUploadedAt = null;
@@ -130,7 +171,7 @@ class ImmLampiran extends Model
             'uploaded_at' => $uploadedAt ?: optional($this->updated_at ?? $this->created_at)->toDateTimeString(),
             'replaced_at' => now()->toDateTimeString(),
             'by'          => $userId,
-            'description' => $currentDesc !== '' ? $currentDesc : null, // ⬅️ pindahkan deskripsi ke VERSI lama
+            'description' => $currentDesc !== '' ? $currentDesc : null,
         ];
 
         // 5) Satukan kembali: versi numerik + meta non-numerik

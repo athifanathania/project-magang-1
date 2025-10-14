@@ -8,4 +8,9 @@ use Filament\Resources\Pages\CreateRecord;
 class CreateImmAuditInternal extends CreateRecord
 {
     protected static string $resource = ImmAuditInternalResource::class;
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
 }

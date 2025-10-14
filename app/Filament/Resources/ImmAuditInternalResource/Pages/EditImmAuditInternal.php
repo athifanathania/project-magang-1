@@ -11,4 +11,9 @@ class EditImmAuditInternal extends EditRecord
     use HandlesImmLampiran;
 
     protected static string $resource = ImmAuditInternalResource::class;
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
 }

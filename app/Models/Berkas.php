@@ -7,10 +7,11 @@ use Illuminate\Database\Eloquent\Model;
 use App\Models\Concerns\HasBerkasVersions;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
+use App\Models\Concerns\HumanReadableActivity;
 
 class Berkas extends Model
 {
-    use HasFactory, HasBerkasVersions, LogsActivity;
+    use HasFactory, HasBerkasVersions, LogsActivity, HumanReadableActivity;
 
     public function getActivitylogOptions(): LogOptions
     {

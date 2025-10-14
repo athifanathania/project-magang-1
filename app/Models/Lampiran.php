@@ -8,10 +8,11 @@ use Illuminate\Validation\ValidationException;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
+use App\Models\Concerns\HumanReadableActivity;
 
 class Lampiran extends Model
 {
-    use HasFactory, LogsActivity;
+    use HasFactory, LogsActivity, HumanReadableActivity;
 
     public function getActivitylogOptions(): LogOptions
     {
@@ -54,7 +55,7 @@ class Lampiran extends Model
     protected ?string $oldFilePath = null;
 
     protected static function booted(): void
-    {
+    { 
         // Pastikan anak selalu mewarisi berkas_id parent
         static::saving(function (Lampiran $m) {
             // Cegah parent menjadi turunan dari $m (mencegah siklus)
