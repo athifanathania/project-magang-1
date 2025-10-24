@@ -29,7 +29,7 @@ class ImmFormulirResource extends Resource
 {
     protected static ?string $model = ImmFormulir::class;
 
-    protected static ?string $navigationGroup = 'Dokumen IMM';
+    protected static ?string $navigationGroup = 'Dokumen Internal';
     protected static ?string $navigationLabel = '4. Formulir';
     protected static ?string $modelLabel      = '4. Formulir';
     protected static ?string $pluralModelLabel= 'Formulir';

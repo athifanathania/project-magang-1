@@ -27,13 +27,13 @@ class CreateBerkas extends CreateRecord
             if (Str::contains($e->getMessage(), ['Duplicate', 'unique'])) {
                 Notification::make()
                     ->title('Gagal menyimpan')
-                    ->body('Dokumen yang ditambahkan sudah tersedia di tabel Regular.')
+                    ->body('Dokumen yang ditambahkan sudah tersedia di tabel Event.')
                     ->danger()
                     ->send();
 
                 throw ValidationException::withMessages([
-                    'kode_berkas' => 'Dokumen yang ditambahkan sudah tersedia di tabel Regular.',
-                    'detail'      => 'Dokumen yang ditambahkan sudah tersedia di tabel Regular.',
+                    'kode_berkas' => 'Dokumen yang ditambahkan sudah tersedia di tabel Event.',
+                    'detail'      => 'Dokumen yang ditambahkan sudah tersedia di tabel Event.',
                 ]);
             }
             throw $e;

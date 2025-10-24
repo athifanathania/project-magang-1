@@ -28,7 +28,7 @@ use App\Filament\Support\FileCell;
 class ImmProsedurResource extends Resource
 {
     protected static ?string $model = ImmProsedur::class;
-    protected static ?string $navigationGroup = 'Dokumen IMM';
+    protected static ?string $navigationGroup = 'Dokumen Internal';
     protected static ?string $navigationLabel = '2. Prosedur';
     protected static ?string $modelLabel      = '2. Prosedur';
     protected static ?string $pluralModelLabel= 'Prosedur';

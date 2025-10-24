@@ -52,10 +52,11 @@ class BerkasResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
 
-    protected static ?string $navigationLabel = 'Regular';
+    protected static ?string $navigationLabel = 'Event';
+    protected static ?string $navigationGroup = 'Dokumen Eksternal';
 
     protected static ?string $modelLabel = 'dokumen';   // singular
-    protected static ?string $pluralModelLabel = 'Regular'; // plural
+    protected static ?string $pluralModelLabel = 'Event'; // plural
 
     use RowClickViewForNonEditors, FileCell;
 
@@ -108,7 +109,7 @@ class BerkasResource extends Resource
                             ->ignore($record?->getKey());
                     })
                     ->validationMessages([
-                        'unique' => 'Dokumen yang ditambahkan sudah tersedia di tabel Regular.',
+                        'unique' => 'Dokumen yang ditambahkan sudah tersedia di tabel Event.',
                     ]),
 
 
@@ -128,7 +129,7 @@ class BerkasResource extends Resource
                             ->ignore($record?->getKey());
                     })
                     ->validationMessages([
-                        'unique' => 'Dokumen yang ditambahkan sudah tersedia di tabel Regular.',
+                        'unique' => 'Dokumen yang ditambahkan sudah tersedia di tabel Event.',
                     ]),
 
                 TagsInput::make('keywords')
@@ -203,7 +204,14 @@ class BerkasResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return static::applyRowClickPolicy($table)   
+        return static::applyRowClickPolicy($table)
+            // >>> default order: cust_name, lalu model (hanya kalau user belum set sort)
+            ->modifyQueryUsing(function (Builder $q) {
+                $hasSort = filled(request()->input('tableSortColumn'));
+                if (! $hasSort) {
+                    $q->orderBy('cust_name')->orderBy('model');
+                }
+            })   
             ->columns([
                 TextColumn::make('cust_name')
                     ->label('Cust Name')
@@ -264,7 +272,49 @@ class BerkasResource extends Resource
                     ->label('File')
                     ->extraCellAttributes(['class' => 'text-xs']),
                 ])
-                ->filters([
+            ->filters([
+                // === Filter select: Cust Name ===
+                Tables\Filters\SelectFilter::make('cust_name')
+                    ->label('Cust Name')
+                    ->options(fn () =>
+                        \App\Models\Berkas::query()
+                            ->whereNotNull('cust_name')
+                            ->distinct()
+                            ->orderBy('cust_name')
+                            ->pluck('cust_name', 'cust_name')
+                            ->all()
+                    )
+                    ->preload()
+                    ->searchable(), // bisa ketik untuk cari option
+
+                // === Filter select: Model ===
+                Tables\Filters\SelectFilter::make('model')
+                    ->label('Model')
+                    ->options(fn () =>
+                        \App\Models\Berkas::query()
+                            ->whereNotNull('model')
+                            ->distinct()
+                            ->orderBy('model')
+                            ->pluck('model', 'model')
+                            ->all()
+                    )
+                    ->preload()
+                    ->searchable(),
+
+                // === Filter select: Part No (kode_berkas) ===
+                Tables\Filters\SelectFilter::make('kode_berkas')
+                    ->label('Part No')
+                    ->options(fn () =>
+                        \App\Models\Berkas::query()
+                            ->whereNotNull('kode_berkas')
+                            ->distinct()
+                            ->orderBy('kode_berkas')
+                            ->pluck('kode_berkas', 'kode_berkas')
+                            ->all()
+                    )
+                    ->preload()
+                    ->searchable(),
+
                     Filter::make('q')
                         ->label('Cari')
                         ->form([
@@ -440,7 +490,10 @@ class BerkasResource extends Resource
             $query->where('is_public', true);
         }
 
-        return $query;
+        // Default sort: 1) cust_name ASC, 2) model ASC
+        return $query
+            ->orderByRaw('LOWER(cust_name) ASC')
+            ->orderByRaw('LOWER(model) ASC');
     }
 
     public static function canViewAny(): bool

@@ -33,7 +33,7 @@ class ImmManualMutuResource extends Resource
 {
     protected static ?string $model = ImmManualMutu::class;
 
-    protected static ?string $navigationGroup = 'Dokumen IMM';
+    protected static ?string $navigationGroup = 'Dokumen Internal';
     protected static ?string $navigationLabel = '1. Manual Mutu';
     protected static ?string $modelLabel      = 'Manual Mutu';
     protected static ?string $pluralModelLabel= '1. Manual Mutu';

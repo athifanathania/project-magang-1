@@ -22,7 +22,7 @@ class ImmAuditInternalResource extends Resource
 {
     protected static ?string $model = ImmAuditInternal::class;
 
-    protected static ?string $navigationGroup = 'Dokumen IMM';
+    protected static ?string $navigationGroup = 'Dokumen Internal';
     protected static ?string $navigationLabel = 'Dokumen Audit Internal';
     protected static ?string $pluralModelLabel = 'Dokumen Audit Internal';
     protected static ?string $modelLabel = 'Dokumen Audit Internal';

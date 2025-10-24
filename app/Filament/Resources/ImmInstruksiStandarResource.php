@@ -29,7 +29,7 @@ class ImmInstruksiStandarResource extends Resource
 {
     protected static ?string $model = ImmInstruksiStandar::class;
 
-    protected static ?string $navigationGroup = 'Dokumen IMM';
+    protected static ?string $navigationGroup = 'Dokumen Internal';
     protected static ?string $navigationLabel = '3. Instruksi Kerja & Standar';
     protected static ?string $modelLabel      = '3. Instruksi Kerja & Standar';
     protected static ?string $pluralModelLabel= 'Instruksi Kerja & Standar';

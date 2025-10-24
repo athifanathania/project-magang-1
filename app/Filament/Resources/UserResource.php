@@ -17,6 +17,8 @@ class UserResource extends Resource
     protected static ?string $model = User::class;
     protected static ?string $navigationIcon = 'heroicon-m-users';
     protected static ?string $navigationLabel = 'Users';
+    protected static ?int $navigationSort = 98;
+    protected static ?string $navigationGroup = 'Admin';
 
     /** Sidebar “Users” hanya muncul untuk Admin */
     public static function shouldRegisterNavigation(): bool
