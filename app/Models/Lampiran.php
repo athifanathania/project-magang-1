@@ -216,7 +216,7 @@ class Lampiran extends Model
         $out = $versions;
         foreach ($meta as $k => $v) { $out[$k] = $v; }
 
-        $this->file_versions = $out;
+        $this->file_versions = $this->renumberFileVersions($out);
     }
 
     public function deleteVersionAtIndex(int $index): bool
@@ -255,7 +255,7 @@ class Lampiran extends Model
         $out = array_values($versions);
         foreach ($meta as $k => $val) { $out[$k] = $val; }
 
-        $this->file_versions = $out;
+        $this->file_versions = $this->renumberFileVersions($out);
         $this->saveQuietly();
 
         return true;
@@ -298,7 +298,7 @@ class Lampiran extends Model
         $out = $versions;
         foreach ($meta as $k => $v) { $out[$k] = $v; }
 
-        $this->file_versions = $out;
+        $this->file_versions = $this->renumberFileVersions($out);
         $this->saveQuietly();
 
         return true;
@@ -318,6 +318,37 @@ class Lampiran extends Model
         $list->prepend($ver);
         $this->file_src_versions = $list->values()->all();
         $this->saveQuietly();
+    }
+
+    protected function renumberFileVersions(array $raw): array
+    {
+        // Pecah numeric entries (versi) & meta (kunci string)
+        $versions = [];
+        $meta     = [];
+
+        foreach ($raw as $k => $v) {
+            $isNumeric = is_int($k) || ctype_digit((string)$k);
+            if ($isNumeric) {
+                if (is_array($v) && (isset($v['file_path']) || isset($v['path']) || isset($v['filename']))) {
+                    $versions[] = $v; // reindex 0..n-1
+                }
+            } else {
+                $meta[$k] = $v;       // simpan meta (mis. __current_desc)
+            }
+        }
+
+        // === NOMORI ULANG: REV00, REV01, ...
+        foreach ($versions as $i => &$row) {
+            $row['revision'] = 'REV' . str_pad((string)$i, 2, '0', STR_PAD_LEFT);
+        }
+        unset($row);
+
+        // Gabungkan kembali (numeric dulu baru meta)
+        $out = $versions;
+        foreach ($meta as $k => $v) {
+            $out[$k] = $v;
+        }
+        return $out;
     }
 
 }

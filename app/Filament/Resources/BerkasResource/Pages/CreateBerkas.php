@@ -9,6 +9,7 @@ use Filament\Notifications\Notification;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Storage;
 
 class CreateBerkas extends CreateRecord
 {
@@ -39,5 +40,31 @@ class CreateBerkas extends CreateRecord
             throw $e;
         }
     }
+
+    protected function afterCreate(): void
+    {
+        $rec = $this->record;
+
+        // upload pertama saat Create biasanya tersimpan di 'berkas/tmp/...'
+        $tmp = (string) ($rec->dokumen ?? '');
+
+        if ($tmp !== '' && str_starts_with($tmp, 'berkas/tmp/')) {
+            $disk   = Storage::disk('private');
+            if (! $disk->exists($tmp)) {
+                return;
+            }
+
+            $dir    = 'berkas/'.$rec->getKey();
+            $name   = basename($tmp);
+            $target = $dir.'/'.$name;
+
+            $disk->makeDirectory($dir);
+            $disk->move($tmp, $target);
+
+            // catat ke riwayat sebagai REV00 (trait kamu sudah start dari 00)
+            $rec->addVersionFromPath($target, basename($target), null, 'REV00');
+        }
+    }
+
 
 }

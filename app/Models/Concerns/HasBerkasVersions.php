@@ -62,7 +62,7 @@ trait HasBerkasVersions
     {
         $last = $this->latestVersion();
         if (!$last || !preg_match('/^rev(\d{1,})$/i', (string)($last['revision'] ?? ''), $m)) {
-            return 'REV01';
+            return 'REV00';
         }
         $n = (int)$m[1] + 1;
         return 'REV' . str_pad((string)$n, 2, '0', STR_PAD_LEFT);
@@ -122,7 +122,7 @@ trait HasBerkasVersions
 
         // renumber & sinkron
         $versions = $versions->values()->map(function ($row, $i) {
-            $row['revision'] = 'REV' . str_pad((string)($i + 1), 2, '0', STR_PAD_LEFT);
+            $row['revision'] = 'REV' . str_pad((string) $i, 2, '0', STR_PAD_LEFT);
             return $row;
         });
 
@@ -142,10 +142,6 @@ trait HasBerkasVersions
         return $new;
     }
 
-    /**
-     * === SATU-SATUNYA pintu untuk nambah versi (mirror IMM) ===
-     * Pakai ini saat ganti file aktif (path sudah tersimpan di disk).
-     */
     public function addVersionFromPath(string $path, ?string $originalName = null, ?string $description = null, ?string $revision = null): array
     {
         if (!$this->exists) {
@@ -174,7 +170,7 @@ trait HasBerkasVersions
 
                 // Renumber & sinkron
                 $versions = $versions->values()->map(function ($row, $i) {
-                    $row['revision'] = 'REV' . str_pad((string)($i + 1), 2, '0', STR_PAD_LEFT);
+                    $row['revision'] = 'REV' . str_pad((string) $i, 2, '0', STR_PAD_LEFT);
                     return $row;
                 });
                 $this->dokumen_versions = $versions->all();
@@ -216,7 +212,7 @@ trait HasBerkasVersions
 
         // Renumber & sinkron (aktif = last)
         $versions = $versions->values()->map(function ($row, $i) {
-            $row['revision'] = 'REV' . str_pad((string)($i + 1), 2, '0', STR_PAD_LEFT);
+            $row['revision'] = 'REV' . str_pad((string) $i, 2, '0', STR_PAD_LEFT);
             return $row;
         });
 
@@ -268,7 +264,7 @@ trait HasBerkasVersions
 
         // Renumber & pastikan last "open"
         $versions = $versions->values()->map(function ($row, $i) {
-            $row['revision'] = 'REV' . str_pad((string)($i + 1), 2, '0', STR_PAD_LEFT);
+            $row['revision'] = 'REV' . str_pad((string) $i, 2, '0', STR_PAD_LEFT);
             return $row;
         });
         $lastIdx = $versions->count() - 1;

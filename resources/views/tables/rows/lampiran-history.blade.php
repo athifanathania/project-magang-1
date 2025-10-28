@@ -185,9 +185,15 @@
               }
               $sizeText  = $sizeBytes ? $fmtSize($sizeBytes) : '-';
 
-              $isActive = empty($v['replaced_at']); // aktif = baris paling atas
+              $isActive = empty($v['replaced_at']);
+
+              // --- REVISI: pakai angka mentah dari revision, fallback ke index kronologis (mulai 0)
               $revRaw = (string)($v['revision'] ?? '');
-              $revNum = preg_match('/\d+/', $revRaw, $m) ? max(1, (int)$m[0]) : ($originalIndex + 1);
+              if ($revRaw !== '' && preg_match('/\d+/', $revRaw, $m)) {
+                  $revNum = (int) $m[0];             // hormati angka yang sudah tersimpan
+              } else {
+                  $revNum = $originalIndex;          // fallback: 0 untuk upload pertama
+              }
               $displayRevision = 'REV' . str_pad($revNum, 2, '0', STR_PAD_LEFT);
             @endphp
 

@@ -126,8 +126,8 @@ $extColor = fn ($ext) => match (strtolower((string)$ext)) {
 
               $revRaw = (string)($v['revision'] ?? '');
               $displayRevision = $revRaw !== ''
-                  ? $revRaw
-                  : ('REV'.str_pad($chronIndex + 1, 2, '0', STR_PAD_LEFT));
+                ? $revRaw
+                : ('REV' . str_pad($chronIndex, 2, '0', STR_PAD_LEFT));
             @endphp
 
             <tr class="odd:bg-white even:bg-gray-50/30 hover:bg-gray-50/70">
