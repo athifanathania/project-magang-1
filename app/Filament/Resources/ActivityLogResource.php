@@ -20,6 +20,18 @@ class ActivityLogResource extends Resource
     protected static ?string $navigationLabel = 'Log History User';
     protected static ?int $navigationSort = 99;
 
+    /** NAV: hanya tampil untuk Admin */
+    public static function shouldRegisterNavigation(): bool
+    {
+        return auth()->user()?->hasRole('Admin') ?? false;
+    }
+
+    /** Permission list records (Filament v3) */
+    public static function canViewAny(): bool
+    {
+        return auth()->user()?->hasRole('Admin') ?? false;
+    }
+
     public static function table(Table $table): Table
     {
         return $table

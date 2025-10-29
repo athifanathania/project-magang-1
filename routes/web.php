@@ -17,9 +17,7 @@
         ->whereNumber(['berkas', 'lampiran'])
         ->name('media.berkas.lampiran');
 
-    //
-    // Download VERSI LAMA (history). Hanya untuk user login dengan role Admin/Editor.
-    //
+
     Route::middleware('auth')->group(function () {
         Route::get('/media/berkas/{berkas}/version/{index}', [MediaController::class, 'berkasVersion'])
             ->whereNumber(['berkas', 'index'])
@@ -44,20 +42,40 @@
 
 
     // --- BUKA FILE LAMPIRAN IMM (letakkan DI ATAS route generik) ---
-    Route::get('/media/imm/lampiran/{lampiran}', function (ImmLampiran $lampiran) {
+    Route::get('/media/imm/lampiran/{lampiran}', function (\App\Models\ImmLampiran $lampiran) {
         abort_if(blank($lampiran->file), 404);
 
         $disk = 'private';
         abort_unless(Storage::disk($disk)->exists($lampiran->file), 404);
 
         $full = Storage::disk($disk)->path($lampiran->file);
-        $mime = File::mimeType($full) ?? 'application/octet-stream';
-        $name = basename($lampiran->file);
+        $size = filesize($full);
+        $ext  = strtolower(pathinfo($full, PATHINFO_EXTENSION));
+        $mime = $ext === 'pdf' ? 'application/pdf' : (File::mimeType($full) ?: 'application/octet-stream');
 
-        return Response::file($full, [
+        // Disposition + nama aman (Edge kadang sensi ke spasi/UTF-8)
+        $baseName   = basename($lampiran->file);
+        $asciiName  = preg_replace('/[^\x20-\x7E]/', '_', $baseName); // fallback ASCII
+        $utf8Name   = rawurlencode($baseName);
+        $disposition = ($ext === 'pdf' ? 'inline' : 'attachment')
+            . '; filename="' . $asciiName . '"'
+            . "; filename*=UTF-8''" . $utf8Name;
+
+        $response = response()->file($full, [
             'Content-Type'        => $mime,
-            'Content-Disposition' => 'inline; filename="'.$name.'"',
+            'Content-Disposition' => $disposition,
+            'Content-Length'      => $size,          // penting untuk Edge
+            'Accept-Ranges'       => 'bytes',
+            // JANGAN set X-Content-Type-Options di endpoint media (Edge+Acrobat bisa salah deteksi)
+            'Cache-Control'       => 'private, max-age=0, must-revalidate',
         ]);
+
+        if (is_file($full)) {
+            $response->setEtag(md5_file($full));
+            $response->setLastModified(\Illuminate\Support\Carbon::createFromTimestamp(filemtime($full)));
+        }
+
+        return $response;
     })->whereNumber('lampiran')->name('media.imm.lampiran');
 
     Route::get('/media/imm/{type}/{id}', [MediaImmController::class, 'file'])
@@ -72,18 +90,36 @@
 
             $versions = collect($rec->file_versions ?? []);
             $v = $versions->get($index);
-            abort_unless($v && !empty($v['file_path']), 404); // <-- ganti ke file_path
+            abort_unless($v && !empty($v['file_path']), 404);
 
             $disk = 'private';
-            abort_unless(Storage::disk($disk)->exists($v['file_path']), 404); // <-- file_path
+            abort_unless(Storage::disk($disk)->exists($v['file_path']), 404);
 
-            $full = Storage::disk($disk)->path($v['file_path']); // <-- file_path
-            $mime = File::mimeType($full) ?? 'application/octet-stream';
-            $name = $v['filename'] ?? basename($v['file_path']); // <-- file_path
+            $full = Storage::disk($disk)->path($v['file_path']);
+            $size = filesize($full);
+            $ext  = strtolower(pathinfo($full, PATHINFO_EXTENSION));
+            $mime = $ext === 'pdf' ? 'application/pdf' : (File::mimeType($full) ?: 'application/octet-stream');
 
-            return Response::file($full, [
+            $baseName   = $v['filename'] ?? basename($v['file_path']);
+            $asciiName  = preg_replace('/[^\x20-\x7E]/', '_', $baseName);
+            $utf8Name   = rawurlencode($baseName);
+            $disposition = ($ext === 'pdf' ? 'inline' : 'attachment')
+                . '; filename="' . $asciiName . '"'
+                . "; filename*=UTF-8''" . $utf8Name;
+
+            $response = response()->file($full, [
                 'Content-Type'        => $mime,
-                'Content-Disposition' => 'inline; filename="'.$name.'"',
+                'Content-Disposition' => $disposition,
+                'Content-Length'      => $size,
+                'Accept-Ranges'       => 'bytes',
+                'Cache-Control'       => 'private, max-age=0, must-revalidate',
             ]);
+
+            if (is_file($full)) {
+                $response->setEtag(md5_file($full));
+                $response->setLastModified(\Illuminate\Support\Carbon::createFromTimestamp(filemtime($full)));
+            }
+
+            return $response;
         })->name('media.imm.version');
     });

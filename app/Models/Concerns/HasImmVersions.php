@@ -86,16 +86,14 @@ trait HasImmVersions
         return $this->versionsList()->last() ?: null;
     }
 
-    /** Hitung kode revisi berikutnya: Rev01, Rev02, ... */
     public function nextRevisionCode(): string
     {
         $last = $this->latestVersion();
         if (!$last || !preg_match('/^rev(\d{1,})$/i', (string) ($last['revision'] ?? ''), $m)) {
-            return 'REV01';
+            return 'REV00'; 
         }
         $n = (int) $m[1] + 1;
         return 'REV' . str_pad((string) $n, 2, '0', STR_PAD_LEFT);
-        // (kalau mau 3 digit: STR_PAD_LEFT ke 3)
     }
 
     /**
@@ -209,9 +207,8 @@ trait HasImmVersions
             $this->revision = $prev['revision']  ?? null;
         }
 
-        // RENUMBER: Rev01, Rev02, ...
         $versions = $versions->values()->map(function ($row, $i) {
-            $row['revision'] = 'REV' . str_pad((string)($i + 1), 2, '0', STR_PAD_LEFT);
+            $row['revision'] = 'REV' . str_pad((string)$i, 2, '0', STR_PAD_LEFT); 
             return $row;
         });
 
@@ -258,4 +255,61 @@ trait HasImmVersions
             ->search(fn ($v) => strcasecmp((string) ($v['revision'] ?? ''), $revision) === 0);
         return $idx === false ? null : (int) $idx;
     }
+
+    public function addVersionFromPath(
+        string $path,
+        ?string $originalName = null,
+        ?string $description = null,
+        ?string $revision = null
+    ): array {
+        if (!$this->exists) $this->save();
+
+        $disk     = static::storageDisk();
+        $fileName = $originalName ?: basename($path);
+        $ext      = strtolower(pathinfo($fileName, PATHINFO_EXTENSION) ?: pathinfo($path, PATHINFO_EXTENSION));
+        $size     = null; try { $size = Storage::disk($disk)->size($path); } catch (\Throwable) {}
+
+        $versions = $this->versionsList();
+
+        // tutup versi lama bila masih open
+        if ($versions->isNotEmpty()) {
+            $last = $versions->pop();
+            if (empty($last['replaced_at'])) $last['replaced_at'] = now()->toISOString();
+            $versions->push($last);
+        }
+
+        $revCode = $revision ?: $this->nextRevisionCode();
+
+        $new = [
+            'revision'    => $revCode,
+            'filename'    => $fileName,
+            'description' => $description,
+            'file_path'   => $path,
+            'file_ext'    => $ext,
+            'file_size'   => $size,
+            'uploaded_at' => now()->toISOString(),
+            'replaced_at' => null,
+        ];
+
+        $versions->push($new);
+
+        $versions = $versions->values()->map(function ($row, $i) {
+            $row['revision'] = 'REV' . str_pad((string)$i, 2, '0', STR_PAD_LEFT);
+            return $row;
+        });
+
+        $this->file          = $path;
+        $this->revision      = $versions->last()['revision'] ?? $revCode;
+        if (blank($this->effective_at)) $this->effective_at = now()->toDateString();
+        $this->file_versions = $versions->all();
+        $this->save();
+
+        $this->logVersionActivity('version_replace', 'Sinkron versi IMM dari path', [
+            'revision'  => $this->revision,
+            'file_path' => $path,
+        ]);
+
+        return $new;
+    }
+
 }

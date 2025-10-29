@@ -3,9 +3,8 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Illuminate\Support\Facades\File;
 
 class MediaImmController extends Controller
 {
@@ -19,21 +18,39 @@ class MediaImmController extends Controller
         ][$type] ?? null;
     }
 
-    /** Stream file AKTIF (path di kolom `file`, disk `private`) */
-    public function file(Request $req, string $type, int $id): StreamedResponse
+    public function file(Request $req, string $type, int $id)
     {
         $modelClass = $this->mapTypeToModel($type);
         abort_unless($modelClass, 404);
 
         $user = $req->user();
-        // hanya Admin/Editor/Staff yang boleh membuka file aktif
         abort_unless($user && $user->hasAnyRole(['Admin','Editor','Staff']), 403);
 
         $m = $modelClass::findOrFail($id);
         $path = (string) $m->file;
         abort_if(blank($path), 404, 'File belum tersedia.');
 
-        return Storage::disk('private')->response($path);
+        $disk = 'private';
+        $full = \Storage::disk($disk)->path($path);
+
+        $ext  = strtolower(pathinfo($full, PATHINFO_EXTENSION));
+        $mime = $ext === 'pdf' ? 'application/pdf' : (\Illuminate\Support\Facades\File::mimeType($full) ?: 'application/octet-stream');
+        $name = basename($path);
+
+        $response = response()->file($full, [
+            'Content-Type'           => $mime,
+            'Content-Disposition'    => ($ext === 'pdf' ? 'inline' : 'attachment') . '; filename="'.$name.'"',
+            'Accept-Ranges'          => 'bytes', // bantu viewer Edge
+            // 'X-Content-Type-Options' => 'nosniff', // jika Edge masih error, coba sementara NONAKTIFKAN baris ini
+        ]);
+
+        // Tambahkan ETag & Last-Modified (membantu caching & range)
+        if (is_file($full)) {
+            $response->setEtag(md5_file($full));
+            $response->setLastModified(\Illuminate\Support\Carbon::createFromTimestamp(filemtime($full)));
+        }
+
+        return $response;
     }
 
     /** Download salah satu versi (index 0-based sesuai urutan tersimpan di kolom `versions`) */

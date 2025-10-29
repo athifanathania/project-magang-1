@@ -58,11 +58,6 @@ class CreateImmLampiran extends CreateRecord
         return $this->backUrl();
     }
 
-    protected function afterCreate(): void
-    {
-        $this->redirect($this->backUrl(), navigate: true);
-    }
-
     protected function getSavedNotification(): ?Notification
     {
         return Notification::make()->title('Lampiran tersimpan')->success();
@@ -107,4 +102,89 @@ class CreateImmLampiran extends CreateRecord
         return $this->getTitle();
     }
 
+    protected function afterCreate(): void
+    {
+        $rec = $this->record;
+
+        // Path upload awal biasanya di folder tmp.
+        // Sesuaikan prefix tmp yang kamu pakai (disiapkan beberapa kemungkinan aman).
+        $tmp = (string) ($rec->file ?? '');
+        $isTmp = $tmp !== '' && (
+            str_starts_with($tmp, 'imm/lampiran/tmp/')
+            || str_starts_with($tmp, 'imm-lampiran/tmp/')
+            || str_starts_with($tmp, 'imm/tmp/')
+        );
+
+        if ($isTmp) {
+            $disk = \Storage::disk('private');
+            if ($disk->exists($tmp)) {
+                // Pindahkan ke folder tetap per-ID
+                $dir    = 'imm/lampiran/'.$rec->getKey();
+                $name   = basename($tmp);
+                $target = $dir.'/'.$name;
+
+                $disk->makeDirectory($dir);
+                $disk->move($tmp, $target);
+
+                // Update kolom file aktif
+                $rec->file = $target;
+
+                // --- Seed riwayat sebagai REV00 (kompat dengan kunci lama & baru) ---
+                $size = null; try { $size = $disk->size($target); } catch (\Throwable) {}
+
+                // Ambil riwayat yang ada (kalau ada data meta, biarkan)
+                $raw = $rec->getAttribute('file_versions');
+                if ($raw instanceof \Illuminate\Support\Collection) $raw = $raw->all();
+                elseif (is_string($raw)) { $j = json_decode($raw, true); $raw = is_array($j) ? $j : []; }
+                elseif (!is_array($raw)) { $raw = []; }
+
+                // Tambahkan entri versi pertama (REV00)
+                $first = [
+                    'revision'     => 'REV00',
+                    'filename'     => basename($target),
+                    'description'  => null,
+                    // dua pasangan kunci utk kompatibilitas Blade/route lama & baru:
+                    'file_path'    => $target,
+                    'path'         => $target,
+                    'file_ext'     => strtolower(pathinfo($target, PATHINFO_EXTENSION)),
+                    'ext'          => strtolower(pathinfo($target, PATHINFO_EXTENSION)),
+                    'file_size'    => $size,
+                    'size'         => $size,
+                    'uploaded_at'  => now()->toISOString(),
+                    'replaced_at'  => null,
+                ];
+
+                // Sisipkan ke akhir (versi terbaru = last)
+                $versions = [];
+                $meta     = [];
+                foreach ($raw as $k => $v) {
+                    $isNumeric = is_int($k) || ctype_digit((string)$k);
+                    if ($isNumeric) {
+                        if (is_array($v) && (isset($v['file_path']) || isset($v['path']) || isset($v['filename']))) {
+                            $versions[] = $v;
+                        }
+                    } else {
+                        $meta[$k] = $v; // jangan ganggu meta lama
+                    }
+                }
+                $versions[] = $first;
+
+                // Renumber mulai 00 (jaga konsistensi jika sebelumnya sudah ada)
+                $versions = collect($versions)->values()->map(function ($row, $i) {
+                    $row['revision'] = 'REV' . str_pad((string)$i, 2, '0', STR_PAD_LEFT);
+                    return $row;
+                })->all();
+
+                // Satukan lagi versi + meta (kunci numerik dulu lalu meta non-numerik)
+                $out = $versions;
+                foreach ($meta as $k => $v) { $out[$k] = $v; }
+
+                $rec->file_versions = $out;
+                $rec->save();
+            }
+        }
+
+        // redirect yang sudah ada (tetap)
+        $this->redirect($this->backUrl(), navigate: true);
+    }
 }

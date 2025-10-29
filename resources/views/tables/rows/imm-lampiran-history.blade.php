@@ -169,10 +169,14 @@
                 // ●● penting: baris aktif = tidak punya replaced_at
                 $isActive = empty($v['replaced_at']);
 
-                // label revisi (fallback dari posisi, agar tidak REV00)
-                $revRaw  = (string)($v['revision'] ?? '');
-                $revNum  = preg_match('/\d+/', $revRaw, $m) ? max(1, (int)$m[0]) : ($originalIndex + 1);
-                $displayRevision = 'REV' . str_pad($revNum, 2, '0', STR_PAD_LEFT);
+                // label revisi -> gunakan nilai yang ada; jika kosong, fallback kronologis: 00, 01, 02, ...
+                $revRaw = (string)($v['revision'] ?? '');
+                if ($revRaw !== '') {
+                    $displayRevision = strtoupper($revRaw);
+                } else {
+                    $chronIndex = $all->count() - 1 - $i; // 0 untuk versi pertama
+                    $displayRevision = 'REV' . str_pad($chronIndex, 2, '0', STR_PAD_LEFT);
+                }
             @endphp
 
             <tr class="odd:bg-white even:bg-gray-50/30 hover:bg-gray-50/70">

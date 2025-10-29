@@ -118,10 +118,13 @@
 
               $isActive = empty($v['replaced_at']);
 
-              // REVxx (hindari REV00)
               $revRaw = (string)($v['revision'] ?? '');
-              $revNum = preg_match('/\d+/', $revRaw, $m) ? max(1, (int)$m[0]) : ($originalIndex + 1);
-              $displayRevision = 'REV' . str_pad($revNum, 2, '0', STR_PAD_LEFT);
+              $count      = $all->count();
+              $chronIndex = $count - 1 - $i;
+
+              $displayRevision = $revRaw !== ''
+                  ? $revRaw
+                  : ('REV' . str_pad($chronIndex, 2, '0', STR_PAD_LEFT));
             @endphp
 
             <tr class="odd:bg-white even:bg-gray-50/30 hover:bg-gray-50/70">
