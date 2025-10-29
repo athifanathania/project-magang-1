@@ -55,8 +55,9 @@ class BerkasResource extends Resource
     protected static ?string $navigationLabel = 'Event';
     protected static ?string $navigationGroup = 'Dokumen Eksternal';
 
-    protected static ?string $modelLabel = 'dokumen';   // singular
-    protected static ?string $pluralModelLabel = 'Event'; // plural
+    protected static ?string $modelLabel = 'dokumen';   
+    protected static ?int    $navigationSort  = 1;
+    protected static ?string $pluralModelLabel = 'Event'; 
 
     use RowClickViewForNonEditors, FileCell;
 

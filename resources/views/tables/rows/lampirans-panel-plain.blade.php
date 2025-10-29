@@ -1,12 +1,13 @@
 @php
 use App\Models\Berkas as MBerkas;
+use App\Models\Regular as MRegular;
 use App\Models\Lampiran as MLampiran;
 use Filament\Facades\Filament;
 
 /** @var mixed $record */
 
 // 1) Tentukan root items (mendukung konteks Berkas dan Lampiran)
-if (isset($record) && $record instanceof MBerkas) {
+if (isset($record) && ($record instanceof MBerkas || $record instanceof MRegular)) {
     $items = $record->rootLampirans()
         ->with('childrenRecursive')
         ->orderBy('id')
@@ -92,20 +93,16 @@ $totalLampiranSemua = $sourceLampirans->count();
 $totalLampiranCocok  = $filtered->count();
 
 // 6) URL tombol header (muncul kalau konteks Berkas)
-$kelolaUrl  = (isset($record) && $record instanceof MBerkas)
-    ? \App\Filament\Resources\LampiranResource::getUrl('index', ['berkas_id' => $record->id])
+$docOwnerId = (isset($record) && ($record instanceof MBerkas || $record instanceof MRegular))
+    ? $record->id
     : null;
 
-$tambahUrl  = (isset($record) && $record instanceof MBerkas)
-    ? \App\Filament\Resources\LampiranResource::getUrl('create', ['berkas_id' => $record->id])
+$kelolaUrl = $docOwnerId
+    ? \App\Filament\Resources\LampiranResource::getUrl('index', ['berkas_id' => $docOwnerId])
     : null;
 
-$kelolaUrl  = (isset($record) && $record instanceof MBerkas)
-    ? \App\Filament\Resources\LampiranResource::getUrl('index', ['berkas_id' => $record->id])
-    : null;
-
-$tambahUrl  = (isset($record) && $record instanceof MBerkas)
-    ? \App\Filament\Resources\LampiranResource::getUrl('create', ['berkas_id' => $record->id])
+$tambahUrl = $docOwnerId
+    ? \App\Filament\Resources\LampiranResource::getUrl('create', ['berkas_id' => $docOwnerId])
     : null;
 
 // ✅ CEK HAK AKSES (viewer publik akan false)

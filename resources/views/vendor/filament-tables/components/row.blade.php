@@ -28,6 +28,7 @@
         \App\Filament\Resources\ImmProsedurResource::class,
         \App\Filament\Resources\ImmInstruksiStandarResource::class,
         \App\Filament\Resources\ImmFormulirResource::class,
+        \App\Filament\Resources\RegularResource::class,
     ], true);
 
     $hasSelection = method_exists($this, 'isTableSelectionEnabled')
@@ -68,7 +69,6 @@
         ])
     }}
 >
-    {{-- ⬇️ Caret kiri untuk VIEWER – markup & kelas SAMA persis seperti di selection/checkbox.blade.php --}}
     @if ($needsOwnCaretCol)
         <td class="fi-ta-selection-cell px-3 py-4">
         @include('tables.partials.caret-button')

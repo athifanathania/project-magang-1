@@ -1,5 +1,6 @@
 @php
 use App\Models\Berkas as MBerkas;
+use App\Models\Regular as MRegular;
 use App\Models\Lampiran as MLampiran;
 use Illuminate\Support\Facades\Storage;
 
@@ -12,7 +13,7 @@ use Illuminate\Support\Facades\Storage;
 |    tidak dikirim.
 |------------------------------------------------------------------
 */
-if (isset($record) && $record instanceof MBerkas) {
+if (isset($record) && ($record instanceof MBerkas || $record instanceof MRegular)) {
     $items = $record->rootLampirans()
         ->with('childrenRecursive')
         ->orderBy('id')
@@ -71,11 +72,16 @@ $existsOnAnyDisk = function (?string $path): bool {
 | URL header actions (hanya muncul jika konteks Berkas)
 |------------------------------------------------------------------
 */
-$kelolaUrl  = (isset($record) && $record instanceof MBerkas)
-    ? \App\Filament\Resources\LampiranResource::getUrl('index', ['berkas_id' => $record->id])
+$docOwnerId = (isset($record) && ($record instanceof MBerkas || $record instanceof MRegular))
+    ? $record->id
     : null;
-$tambahUrl  = (isset($record) && $record instanceof MBerkas)
-    ? \App\Filament\Resources\LampiranResource::getUrl('create', ['berkas_id' => $record->id])
+
+$kelolaUrl = $docOwnerId
+    ? \App\Filament\Resources\LampiranResource::getUrl('index', ['berkas_id' => $docOwnerId])
+    : null;
+
+$tambahUrl = $docOwnerId
+    ? \App\Filament\Resources\LampiranResource::getUrl('create', ['berkas_id' => $docOwnerId])
     : null;
 @endphp
 

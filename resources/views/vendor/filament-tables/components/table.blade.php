@@ -26,6 +26,7 @@
                     \App\Filament\Resources\ImmProsedurResource::class,
                     \App\Filament\Resources\ImmInstruksiStandarResource::class,
                     \App\Filament\Resources\ImmFormulirResource::class,
+                    \App\Filament\Resources\RegularResource::class,
                 ], true);
 
                 $hasSelection = method_exists($this, 'isTableSelectionEnabled')

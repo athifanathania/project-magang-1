@@ -351,4 +351,9 @@ class Lampiran extends Model
         return $out;
     }
 
+    public function regular()
+    {
+        return $this->belongsTo(\App\Models\Regular::class, 'regular_id');
+    }
+
 }
