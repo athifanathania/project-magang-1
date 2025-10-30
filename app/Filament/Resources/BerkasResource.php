@@ -45,6 +45,7 @@ use App\Filament\Support\RowClickViewForNonEditors;
 use App\Filament\Support\FileCell;
 use Illuminate\Validation\Rule;
 use Filament\Forms\Get;
+use Illuminate\Database\Eloquent\Model;
 
 class BerkasResource extends Resource
 {
@@ -103,7 +104,7 @@ class BerkasResource extends Resource
                 TextInput::make('kode_berkas')
                     ->label('Part No')
                     ->required()
-                    ->rules(function (Get $get, ?\App\Models\Berkas $record) {
+                    ->rules(function (Get $get, ?Model $record) {
                         $detail = mb_strtolower(trim((string) $get('detail')));
                         return Rule::unique('berkas', 'kode_berkas')
                             ->where(fn ($q) => $q->whereRaw('LOWER(TRIM(`detail`)) = ?', [$detail]))
@@ -123,7 +124,7 @@ class BerkasResource extends Resource
                     ->placeholder('mis. Document')
                     ->required()
                     ->datalist(['Document','Part'])
-                    ->rules(function (Get $get, ?\App\Models\Berkas $record) {
+                    ->rules(function (Get $get, ?\Illuminate\Database\Eloquent\Model $record) {
                         $kode = mb_strtolower(trim((string) $get('kode_berkas')));
                         return Rule::unique('berkas', 'detail')
                             ->where(fn ($q) => $q->whereRaw('LOWER(TRIM(`kode_berkas`)) = ?', [$kode]))
@@ -269,10 +270,14 @@ class BerkasResource extends Resource
                     ->extraCellAttributes([
                         'class' => 'max-w-[22rem] whitespace-normal break-words',
                     ]),
-                static::fileTextColumn('dokumen', fn ($record) => route('media.berkas', $record))
+                static::fileTextColumn('dokumen', function ($record) {
+                    return $record instanceof \App\Models\Regular
+                        ? route('media.regular', $record)
+                        : route('media.berkas', $record);
+                })
                     ->label('File')
                     ->extraCellAttributes(['class' => 'text-xs']),
-                ])
+            ]) 
             ->filters([
                 // === Filter select: Cust Name ===
                 Tables\Filters\SelectFilter::make('cust_name')
@@ -412,7 +417,8 @@ class BerkasResource extends Resource
                         ->modalSubmitAction(false)
                         ->modalWidth('7xl')
                         ->modalCancelActionLabel('Tutup')
-                        ->modalContent(function (\App\Models\Berkas $record) {
+                        ->modalContent(function (? \Illuminate\Database\Eloquent\Model $record) {
+                            if (! $record) return view('tables.rows.lampirans', ['record' => null, 'lampirans' => collect()]);
                             $roots = $record->rootLampirans()->with('childrenRecursive')->orderBy('id')->get();
                             return view('tables.rows.lampirans', ['record' => $record, 'lampirans' => $roots]);
                         })
@@ -440,10 +446,7 @@ class BerkasResource extends Resource
                     Action::make('downloadSource')
                         ->label('')
                         ->icon('heroicon-o-arrow-down-tray')
-                        ->url(fn ($record) => route('download.source', [
-                            'type' => 'berkas',
-                            'id'   => $record->getKey(),
-                        ]))
+                        ->url(fn ($record) => route('download.source', ['type' => 'berkas','id'=>$record->getKey()]))
                         ->openUrlInNewTab()
                         ->visible(fn () => \Illuminate\Support\Facades\Gate::allows('download-source'))
                         ->disabled(fn ($record) => blank($record->dokumen_src))
@@ -451,7 +454,6 @@ class BerkasResource extends Resource
                             ? 'File asli belum diunggah'
                             : 'Download file asli'
                         )
-                        // jaga-jaga kalau tooltip bawaan tidak muncul di kondisi tertentu:
                         ->extraAttributes(fn ($record) => [
                             'title' => blank($record->dokumen_src)
                                 ? 'File asli belum diunggah'
