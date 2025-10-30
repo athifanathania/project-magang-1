@@ -45,7 +45,7 @@ $norm = function ($v) {
         if (json_last_error() === JSON_ERROR_NONE && is_array($j)) {
             return collect($j)->flatten()->filter()->map(fn ($x) => mb_strtolower(trim((string) $x)));
         }
-        return collect([mb_strtolower($v)]);
+        return collect([mb_strtolower(trim($v))]);
     }
     if (is_object($v)) {
         return collect((array) $v)->flatten()->filter()->map(fn ($x) => mb_strtolower(trim((string) $x)));
@@ -98,12 +98,16 @@ $docOwnerId = (isset($record) && ($record instanceof MBerkas || $record instance
     : null;
 
 $kelolaUrl = $docOwnerId
-    ? \App\Filament\Resources\LampiranResource::getUrl('index', ['berkas_id' => $docOwnerId])
+    ? \App\Filament\Resources\LampiranResource::getUrl('index', [
+        $record instanceof MRegular ? 'regular_id' : 'berkas_id' => $docOwnerId,
+    ])
     : null;
 
 $tambahUrl = $docOwnerId
-    ? \App\Filament\Resources\LampiranResource::getUrl('create', ['berkas_id' => $docOwnerId])
-    : null;
+  ? \App\Filament\Resources\LampiranResource::getUrl('create', [
+        $record instanceof MRegular ? 'regular_id' : 'berkas_id' => $docOwnerId,
+    ])
+  : null;
 
 // ✅ CEK HAK AKSES (viewer publik akan false)
 $user = Filament::auth()->user();
@@ -141,7 +145,7 @@ $canCreateLampiran = $user?->can('lampiran.create') ?? false;
     class="p-5"
     x-data="{
         // state konfirmasi hapus lampiran (node)
-        toDelete: { id: null, berkasId: null },
+        toDelete: { id: null, ownerId: null },
         // state konfirmasi hapus versi
         toDeleteVersion: { lampiranId: null, index: null, name: '' },
         // id komponen Livewire halaman (ListBerkas)
@@ -205,6 +209,8 @@ $canCreateLampiran = $user?->can('lampiran.create') ?? false;
                     'filterAll'    => $modeAll,
                     'forceShowSub' => true,
                     'modalId'      => "view-lampiran-panel-{$record->id}",   
+                    'ownerId'      => $docOwnerId,
+                    'isRegular'    => ($record instanceof \App\Models\Regular),
                 ])
             @endforeach
         </div>
@@ -238,7 +244,7 @@ $canCreateLampiran = $user?->can('lampiran.create') ?? false;
 
                     setTimeout(() => {
                         window.Livewire.find(pageId)
-                            .call('handleDeleteLampiran', toDelete.id, toDelete.berkasId, 'panel')
+                            .call('handleDeleteLampiran', toDelete.id, toDelete.ownerId, 'panel')
                             .then(() => {
                                 // opsional: reload supaya state bersih & tidak auto-buka modal
                                 window.location.replace(window.location.pathname + window.location.search);

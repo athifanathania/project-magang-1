@@ -13,19 +13,21 @@ class CreateLampiran extends CreateRecord
 
     protected function getRedirectUrl(): string
     {
-        // id berkas asal (dari query atau dari record yang baru dibuat)
-        $berkasId = request('berkas_id') ?? data_get($this->record, 'berkas_id');
+        $berkasId  = request('berkas_id')  ?? data_get($this->record, 'berkas_id');
+        $regularId = request('regular_id') ?? data_get($this->record, 'regular_id');
 
-        // balik ke list Dokumen + minta auto-buka modal Lampiran untuk berkas tsb
         if ($berkasId) {
-            return BerkasResource::getUrl('index', [
+            return \App\Filament\Resources\BerkasResource::getUrl('index', [
                 'openLampiran' => 1,
                 'berkas_id'    => $berkasId,
             ]);
         }
 
-        // fallback: balik ke list Dokumen saja
-        return BerkasResource::getUrl('index');
+        if ($regularId) {
+            return \App\Filament\Resources\RegularResource::getUrl('index');
+        }
+
+        return \App\Filament\Resources\BerkasResource::getUrl('index');
     }
 
     protected function getSavedNotification(): ?Notification
@@ -33,5 +35,10 @@ class CreateLampiran extends CreateRecord
         return Notification::make()
             ->title('Lampiran tersimpan')
             ->success();
+    }
+
+    protected function mutateFormDataBeforeCreate(array $data): array
+    {
+        return \App\Filament\Resources\LampiranResource::normalizeOwner($data);
     }
 }

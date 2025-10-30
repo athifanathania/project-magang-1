@@ -26,11 +26,11 @@ use Filament\Forms\Components\FileUpload;
 use Illuminate\Support\Str;
 use App\Filament\Support\RowClickViewForNonEditors;
 use App\Filament\Support\FileCell;
+use App\Models\Lampiran as MLampiran;
 
 class LampiranResource extends Resource
 {
-    // protected static bool $shouldRegisterNavigation = false;
-    protected static bool $shouldRegisterNavigation = false; // sembunyikan dari sidebar
+    protected static bool $shouldRegisterNavigation = false; 
     protected static bool $isGloballySearchable   = false;
 
     protected static ?string $model = Lampiran::class;
@@ -50,27 +50,52 @@ class LampiranResource extends Resource
         ($context === 'view') || request()->boolean('view'); // ← dukung context & ?view=1
         
         return $form->schema([
+            // === Event (berkas_id) ===
             Forms\Components\Select::make('berkas_id')
-                ->label('Dokumen')
+                ->label('Event')
                 ->relationship('berkas', 'nama')
-                ->searchable()
-                ->preload()
-                ->required()
-                ->disabled($readonly)
-                ->default(request('berkas_id')),
+                ->searchable()->preload()->live()
+                ->afterStateUpdated(fn ($state, callable $set) => [$set('regular_id', null), $set('parent_id', null)])
+                ->default(request('berkas_id'))
+                // tampil hanya jika TIDAK dari Regular
+                ->hidden(fn (Forms\Get $get) => filled($get('regular_id')) || filled(request('regular_id')))
+                // hanya kirim kalau ada nilainya
+                ->dehydrated(fn (Forms\Get $get) => filled($get('berkas_id')))
+                // wajib hanya kalau regular_id kosong
+                ->required(fn (Forms\Get $get) => blank($get('regular_id')))
+                ->disabled($readonly),
+
+            // === Regular (regular_id) ===
+            Forms\Components\Select::make('regular_id')
+                ->label('Regular')
+                ->relationship('regular', 'nama')
+                ->searchable()->preload()->live()
+                ->afterStateUpdated(fn ($state, callable $set) => [$set('berkas_id', null), $set('parent_id', null)])
+                ->default(request('regular_id'))
+                // tampil hanya jika TIDAK dari Event
+                ->hidden(fn (Forms\Get $get) => filled($get('berkas_id')) || filled(request('berkas_id')))
+                // hanya kirim kalau ada nilainya
+                ->dehydrated(fn (Forms\Get $get) => filled($get('regular_id')))
+                // wajib hanya kalau berkas_id kosong
+                ->required(fn (Forms\Get $get) => blank($get('berkas_id')))
+                ->disabled($readonly),
 
             Forms\Components\Select::make('parent_id')
                 ->label('Parent (opsional)')
                 ->reactive()
                 ->disabled($readonly)
                 ->options(function (Get $get, ?\App\Models\Lampiran $record) {
-                    $berkasId = $get('berkas_id') ?? request('berkas_id');
-                    return \App\Models\Lampiran::query()
-                        ->when($berkasId, fn($q) => $q->where('berkas_id', $berkasId))
-                        ->when($record, fn($q) => $q->where('id', '!=', $record->id))
-                        ->orderBy('nama')
-                        ->pluck('nama', 'id');
-                })
+                        $berkasId  = $get('berkas_id')  ?? request('berkas_id');
+                        $regularId = $get('regular_id') ?? request('regular_id');
+
+                        return \App\Models\Lampiran::query()
+                            ->when($berkasId,  fn($q) => $q->where('berkas_id',  $berkasId))
+                            ->when($regularId, fn($q) => $q->where('regular_id', $regularId))
+                            ->when(!$berkasId && !$regularId, fn($q) => $q->whereRaw('1=0')) // <— tambah ini
+                            ->when($record,    fn($q) => $q->where('id', '!=', $record->id))
+                            ->orderBy('nama')
+                            ->pluck('nama', 'id');
+                    })
                 ->searchable()
                 ->nullable()
                 ->default(request('parent_id')),
@@ -122,19 +147,11 @@ class LampiranResource extends Resource
                 ->hintAction(
                     FormAction::make('openFile')
                         ->label('Buka file')
-                        ->url(
-                            fn ($record) => ($record && $record->file)
-                                ? route('media.berkas.lampiran', [
-                                    'berkas'  => $record->berkas_id,
-                                    'lampiran'=> $record->id,
-                                ])
-                                : null,
-                            shouldOpenInNewTab: true
-                        )
+                        ->url(fn ($record) => $record?->mediaUrl(), true)
                         ->visible(fn ($record) =>
-                                filled($record?->file)
-                                && (auth()->user()?->hasAnyRole(['Admin','Editor','Staff']) ?? false)
-                            )
+                            filled($record?->file) &&
+                            (auth()->user()?->hasAnyRole(['Admin','Editor','Staff']) ?? false)
+                        )
                 ),
             FileUpload::make('file_src')
                 ->label('File Asli (Admin saja)')
@@ -164,19 +181,28 @@ class LampiranResource extends Resource
     {
         return $table
             ->modifyQueryUsing(function (Builder $query) {
-                $query->leftJoin('berkas as b', 'lampirans.berkas_id', '=', 'b.id')
-                    ->select('lampirans.*');
+                $query
+                    ->leftJoin('berkas as b', 'lampirans.berkas_id', '=', 'b.id')
+                    ->leftJoin('regulars as r', 'lampirans.regular_id', '=', 'r.id')
+                    ->selectRaw('lampirans.*, COALESCE(b.nama, r.nama) as owner_name');
             })
             ->columns([
-                Tables\Columns\TextColumn::make('berkas.nama')
-                    ->label('Part Name')
-                    // sort TANPA join lagi (kita sudah join alias `b` di base query)
-                    ->sortable(query: fn (Builder $query, string $direction): Builder =>
-                        $query->orderBy('b.nama', $direction)
-                    )
-                    // searchable juga TANPA join lagi, pakai nama param `search`
-                    ->searchable(query: fn (Builder $query, string $search): Builder =>
-                        $query->where('b.nama', 'like', "%{$search}%")
+                Tables\Columns\TextColumn::make('owner_name')
+                    ->label('Owner')
+                    ->sortable(query: function (Builder $q, string $dir): Builder {
+                        $table = $q->getModel()->getTable();
+                        return $q
+                            ->reorder() 
+                            ->orderByRaw("COALESCE(b.nama, r.nama) {$dir}") 
+                            ->orderByRaw("IFNULL(CAST(REGEXP_SUBSTR({$table}.nama, '[0-9]+') AS UNSIGNED), 999999999) {$dir}")
+                            ->orderBy("{$table}.nama", $dir);
+                    })
+                    // search di b.nama ATAU r.nama
+                    ->searchable(query: fn (Builder $q, string $search) =>
+                        $q->where(function (Builder $w) use ($search) {
+                            $w->where('b.nama', 'like', "%{$search}%")
+                            ->orWhere('r.nama', 'like', "%{$search}%");
+                        })
                     )
                     ->toggleable(),
 
@@ -187,13 +213,9 @@ class LampiranResource extends Resource
                     ->sortable(query: function (Builder $query, string $direction): Builder {
                         $table = $query->getModel()->getTable(); // 'lampirans'
                         return $query
-                            // bersihkan ORDER BY lama, lalu tetap kunci Part Name A–Z
-                            ->reorder('b.nama', 'asc')
-                            // urut angka pertama dalam 'nama' sebagai numerik
-                            ->orderByRaw(
-                                "IFNULL(CAST(REGEXP_SUBSTR({$table}.nama, '[0-9]+') AS UNSIGNED), 999999999) {$direction}"
-                            )
-                            // fallback alfabet jika sama angkanya
+                            ->reorder() 
+                            ->orderByRaw("COALESCE(b.nama, r.nama) asc") 
+                            ->orderByRaw("IFNULL(CAST(REGEXP_SUBSTR({$table}.nama, '[0-9]+') AS UNSIGNED), 999999999) {$direction}")
                             ->orderBy("{$table}.nama", $direction);
                     })
                     ->searchable(
@@ -276,10 +298,10 @@ class LampiranResource extends Resource
                 Tables\Actions\Action::make('addChild')
                     ->label('Tambah Sub')
                     ->icon('heroicon-m-plus')
-                    ->url(fn ($record) => route('filament.admin.resources.lampirans.create', [
-                        'parent_id' => $record->id,
-                        'berkas_id' => $record->berkas_id,
-                    ]))
+                    ->url(fn ($record) => route('filament.admin.resources.lampirans.create', array_filter([
+                        'parent_id'  => $record->id,
+                        $record->berkas_id ? 'berkas_id' : 'regular_id' => $record->berkas_id ?: $record->regular_id,
+                    ])))
                     ->visible(fn()=>auth()->user()->can('lampiran.create')),
 
                 Tables\Actions\DeleteAction::make()
@@ -297,7 +319,7 @@ class LampiranResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         // Cukup eager-load relasi. TANPA join/order.
-        return parent::getEloquentQuery()->with(['berkas', 'parent']);
+        return parent::getEloquentQuery()->with(['berkas', 'regular', 'parent']);
     }
 
     public static function getPages(): array
@@ -323,6 +345,29 @@ class LampiranResource extends Resource
     public static function shouldRegisterNavigation(): bool
     {
         return auth()->user()?->can('lampiran.view') ?? false;
+    }
+
+    public static function normalizeOwner(array $data): array
+    {
+        $berkasId  = request()->integer('berkas_id')  ?: ($data['berkas_id']  ?? null);
+        $regularId = request()->integer('regular_id') ?: ($data['regular_id'] ?? null);
+
+        // Pastikan eksklusif satu owner
+        if ($berkasId && $regularId) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'owner' => 'Pilih salah satu: Event/Berkas atau Regular.',
+            ]);
+        }
+        if (!$berkasId && !$regularId) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'owner' => 'Lampiran harus terikat ke Event/Berkas atau Regular.',
+            ]);
+        }
+
+        $data['berkas_id']  = $berkasId ?: null;
+        $data['regular_id'] = $regularId ?: null;
+
+        return $data;
     }
 
 }

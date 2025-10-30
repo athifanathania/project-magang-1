@@ -34,10 +34,15 @@ class EditLampiran extends EditRecord
 
     protected function getRedirectUrl(): string
     {
-        // kalau mau balik ke index Berkas, optionally kirim berkas_id
-        return BerkasResource::getUrl('index', [
-            'berkas_id' => $this->record->berkas_id, // boleh dihapus kalau tak dipakai
-        ]);
+        if ($this->record->berkas_id) {
+            return \App\Filament\Resources\BerkasResource::getUrl('index', [
+                'berkas_id' => $this->record->berkas_id,
+            ]);
+        } 
+        if ($this->record->regular_id) {
+            return \App\Filament\Resources\RegularResource::getUrl('index');
+        }
+        return \App\Filament\Resources\BerkasResource::getUrl('index');
     }
 
     protected function resolveRecord(string|int $key): EloquentModel
@@ -48,5 +53,9 @@ class EditLampiran extends EditRecord
         return $model::query()->findOrFail($key);
     }
 
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        return \App\Filament\Resources\LampiranResource::normalizeOwner($data);
+    }
 
 }

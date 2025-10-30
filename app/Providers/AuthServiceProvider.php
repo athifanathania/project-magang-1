@@ -16,6 +16,7 @@ class AuthServiceProvider extends ServiceProvider
     protected $policies = [
         \App\Models\Berkas::class   => \App\Policies\BerkasPolicy::class,
         \App\Models\Lampiran::class => \App\Policies\LampiranPolicy::class,
+        \App\Models\Regular::class  => \App\Policies\RegularPolicy::class,
     ];
 
     /**

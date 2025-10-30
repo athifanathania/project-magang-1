@@ -119,7 +119,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/media/regular/{regular}', [MediaRegularController::class, 'regular'])
         ->whereNumber('regular')->name('media.regular');
 
-    Route::get('/media/regular/{regular}/lampiran/{lampiran}', [MediaRegularController::class, 'lampiran'])
+    Route::get('/media/regular/{regular}/lampiran/{lampiran}', [MediaController::class, 'lampiranRegular'])
         ->whereNumber(['regular','lampiran'])->name('media.regular.lampiran');
 
     Route::get('/media/regular/{regular}/version/{index}', [MediaRegularController::class, 'regularVersion'])

@@ -24,6 +24,10 @@ if (isset($record) && ($record instanceof MBerkas || $record instanceof MRegular
         : collect($lampirans ?? []);
 }
 
+$isBerkas  = isset($record) && ($record instanceof MBerkas);
+$isRegular = isset($record) && ($record instanceof MRegular);
+$ownerId   = $isRegular ? ($record->id ?? null) : ($isBerkas ? ($record->id ?? null) : null);
+
 /*
 |------------------------------------------------------------------
 | Helper keywords untuk kolom root
@@ -72,16 +76,16 @@ $existsOnAnyDisk = function (?string $path): bool {
 | URL header actions (hanya muncul jika konteks Berkas)
 |------------------------------------------------------------------
 */
-$docOwnerId = (isset($record) && ($record instanceof MBerkas || $record instanceof MRegular))
-    ? $record->id
+$kelolaUrl = $ownerId
+    ? \App\Filament\Resources\LampiranResource::getUrl('index', $isRegular
+        ? ['regular_id' => $ownerId]
+        : ['berkas_id'  => $ownerId])
     : null;
 
-$kelolaUrl = $docOwnerId
-    ? \App\Filament\Resources\LampiranResource::getUrl('index', ['berkas_id' => $docOwnerId])
-    : null;
-
-$tambahUrl = $docOwnerId
-    ? \App\Filament\Resources\LampiranResource::getUrl('create', ['berkas_id' => $docOwnerId])
+$tambahUrl = $ownerId
+    ? \App\Filament\Resources\LampiranResource::getUrl('create', $isRegular
+        ? ['regular_id' => $ownerId]
+        : ['berkas_id'  => $ownerId])
     : null;
 @endphp
 
@@ -110,7 +114,7 @@ $tambahUrl = $docOwnerId
 
 <div
   class="p-5"
-  x-data="{ opens: {}, toDelete: { id: null, berkasId: null } }"
+  x-data="{ opens: {}, toDelete: { id: null, ownerId: null } }"
   x-on:set-lampiran-to-delete.window="
       toDelete = $event.detail;
       $dispatch('open-modal', { id: 'confirm-delete-lampiran' });
@@ -167,11 +171,13 @@ $tambahUrl = $docOwnerId
 
                                 $editUrl   = \App\Filament\Resources\LampiranResource::getUrl('edit', ['record' => $lampiran]);
                                 $canManage = auth()->user()?->hasAnyRole(['Admin','Editor','Staff']) ?? false; // viewer = false
-                                $hasFile   = ! $noFile;
-
-                                $openUrl = $hasFile
-                                    ? route('media.berkas.lampiran', ['berkas' => $lampiran->berkas_id, 'lampiran' => $lampiran->id])
-                                    : null;
+                                $hasFile = ! $noFile; 
+                                $openUrl = null;
+                                if ($hasFile) {
+                                    $openUrl = $isRegular
+                                        ? route('media.regular.lampiran', ['regular' => $ownerId, 'lampiran' => $lampiran->id])
+                                        : route('media.berkas.lampiran',   ['berkas'  => $ownerId, 'lampiran' => $lampiran->id]);
+                                }
                             @endphp
 
                             {{-- ROOT ROW --}}
@@ -210,11 +216,10 @@ $tambahUrl = $docOwnerId
                                                 {{-- + Sub khusus root --}}
                                                 @can('create', \App\Models\Lampiran::class)
                                                 <a
-                                                    href="{{ \App\Filament\Resources\LampiranResource::getUrl('create', [
-                                                        'parent_id' => $lampiran->id,
-                                                        'berkas_id' => $lampiran->berkas_id,
-                                                    ]) }}"
-                                                    class="text-xs px-2 py-0.5 rounded border border-gray-200 hover:bg-gray-50"
+                                                    href="{{ \App\Filament\Resources\LampiranResource::getUrl('create',
+                                                        ['parent_id' => $lampiran->id] + ($isRegular ? ['regular_id' => $ownerId] : ['berkas_id' => $ownerId])
+                                                    ) }}"
+                                                class="text-xs px-2 py-0.5 rounded border border-gray-200 hover:bg-gray-50"
                                                 >+ Sub</a>
                                                 @endcan
                                             </div>
@@ -279,7 +284,10 @@ $tambahUrl = $docOwnerId
 
                                         @can('delete', $lampiran)
                                         <button type="button" class="ml-2 text-gray-400 hover:text-red-600" title="Hapus lampiran"
-                                                @click.stop="$dispatch('set-lampiran-to-delete', { id: {{ $lampiran->id }}, berkasId: {{ $lampiran->berkas_id }} })">
+                                            @click.stop="$dispatch('set-lampiran-to-delete', {
+                                                id: {{ $lampiran->id }},
+                                                ownerId: {{ $ownerId }}
+                                            })">
                                             <x-filament::icon icon="heroicon-m-trash" class="w-4 h-4" />
                                         </button>
                                         @endcan
@@ -294,8 +302,11 @@ $tambahUrl = $docOwnerId
                                     <td colspan="3" class="pl-8">
                                         @foreach ($children as $child)
                                             @include('tables.rows.partials.lampiran-card-node', [
-                                                'lampiran'      => $child,
-                                                'level'         => 1,
+                                                'lampiran'   => $child,
+                                                'level'      => 1,
+                                                'isRegular'  => $isRegular,
+                                                'isBerkas'   => $isBerkas,
+                                                'ownerId'    => $ownerId,
                                             ])
                                         @endforeach
                                     </td>
@@ -329,11 +340,11 @@ $tambahUrl = $docOwnerId
             >Batal</x-filament::button>
 
             <x-filament::button
-                color="danger"
-                x-on:click="
-                    $wire.handleDeleteLampiran(toDelete.id, toDelete.berkasId, 'modal');
-                    $dispatch('close-modal', { id: 'confirm-delete-lampiran' });
-                "
+            color="danger"
+            x-on:click="
+                $wire.handleDeleteLampiran(toDelete.id, toDelete.ownerId, 'modal');
+                $dispatch('close-modal', { id: 'confirm-delete-lampiran' });
+            "
             >Hapus</x-filament::button>
         </x-slot>
     </x-filament::modal>

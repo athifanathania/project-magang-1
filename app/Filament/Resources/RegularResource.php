@@ -33,7 +33,6 @@ class RegularResource extends Resource
         // Ambil komponen (v3: getComponents), lalu sesuaikan direktori/file hint untuk Regular
         $components = collect($baseForm->getComponents())->map(function ($c) {
             if ($c instanceof \Filament\Forms\Components\FileUpload) {
-                // Dokumen utama → simpan di folder 'regular'
                 if ($c->getName() === 'dokumen') {
                     $c->disk('private')->directory('regular')
                         ->hintAction(
@@ -77,8 +76,59 @@ class RegularResource extends Resource
 
     public static function table(Table $table): Table
     {
-        // ambil tabel dari BerkasResource biar identik
-        return \App\Filament\Resources\BerkasResource::table($table);
+        $t = \App\Filament\Resources\BerkasResource::table($table);
+
+        // Ganti action yang bentrok
+        return $t->actions([
+            \Filament\Tables\Actions\Action::make('lampiran')
+                ->label('')
+                ->icon('heroicon-m-paper-clip')
+                ->color('gray')
+                ->size('xs')
+                ->modalHeading('Dokumen Pelengkap')
+                ->modalSubmitAction(false)
+                ->modalWidth('7xl')
+                ->modalCancelActionLabel('Tutup')
+                ->modalContent(function (? \Illuminate\Database\Eloquent\Model $record) {
+                    if (! $record) return view('tables.rows.lampirans', ['record' => null, 'lampirans' => collect()]);
+                    $roots = $record->rootLampirans()->with('childrenRecursive')->orderBy('id')->get();
+                    return view('tables.rows.lampirans', ['record' => $record, 'lampirans' => $roots]);
+                })
+                ->tooltip('Dokumen Pelengkap'),
+
+            \Filament\Tables\Actions\ViewAction::make()
+                ->label('')
+                ->icon('heroicon-m-eye')
+                ->modalWidth('7xl')
+                ->tooltip('Lihat'),
+
+            \Filament\Tables\Actions\EditAction::make()
+                ->label('')
+                ->icon('heroicon-m-pencil')
+                ->tooltip('Edit')
+                ->visible(fn () => auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false),
+
+            \Filament\Tables\Actions\DeleteAction::make()
+                ->label('')
+                ->icon('heroicon-m-trash')
+                ->tooltip('Hapus')
+                ->visible(fn () => auth()->user()?->hasRole('Admin') ?? false),
+
+            \Filament\Tables\Actions\Action::make('downloadSource')
+                ->label('')
+                ->icon('heroicon-o-arrow-down-tray')
+                ->url(fn ($record) => route('download.source', [
+                    'type' => 'regular',   // ← khusus Regular
+                    'id'   => $record->getKey(),
+                ]))
+                ->openUrlInNewTab()
+                ->visible(fn () => \Illuminate\Support\Facades\Gate::allows('download-source'))
+                ->disabled(fn ($record) => blank($record->dokumen_src))
+                ->tooltip(fn ($record) => blank($record->dokumen_src) ? 'File asli belum diunggah' : 'Download file asli')
+                ->extraAttributes(fn ($record) => [
+                    'title' => blank($record->dokumen_src) ? 'File asli belum diunggah' : 'Download file asli',
+                ]),
+        ]);
     }
 
     public static function getPages(): array

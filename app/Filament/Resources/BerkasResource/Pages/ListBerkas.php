@@ -48,28 +48,35 @@ class ListBerkas extends ListRecords
         return [ Actions\CreateAction::make() ];
     }
 
-    /** Dipanggil dari blade via $wire.handleDeleteLampiran(...) */
-    public function handleDeleteLampiran(int $lampiranId, int $berkasId, string $source = 'panel'): void
-    {
+    public function handleDeleteLampiran(
+        int $lampiranId,
+        int $ownerId,
+        string $source = 'panel'
+    ): void {
         abort_unless(auth()->user()?->hasRole('Admin'), 403);
 
-        $lampiran = Lampiran::query()
+        // pastikan lampiran ditemukan & memang milik owner (berkas atau regular)
+        $lampiran = \App\Models\Lampiran::query()
             ->whereKey($lampiranId)
-            ->where('berkas_id', $berkasId)
+            ->where(function ($q) use ($ownerId) {
+                $q->where('berkas_id', $ownerId)
+                ->orWhere('regular_id', $ownerId);
+            })
             ->first();
 
         if (! $lampiran) {
-            Notification::make()->title('Lampiran tidak ditemukan')->danger()->send();
+            \Filament\Notifications\Notification::make()
+                ->title('Lampiran tidak ditemukan atau bukan milik dokumen ini')
+                ->danger()->send();
             return;
         }
 
         $lampiran->delete();
 
-        Notification::make()
-            ->title('Lampiran terhapus')
-            ->body('Lampiran beserta semua subnya telah dihapus.')
-            ->success()
-            ->send();
+        \Filament\Notifications\Notification::make()
+            ->title('Lampiran dihapus')->success()->send();
+
+        $this->dispatch('refreshLampiranPanel'); // (opsional) kalau ada listener
     }
 
     /** (tetap ada utk versi dokumen berkas) */

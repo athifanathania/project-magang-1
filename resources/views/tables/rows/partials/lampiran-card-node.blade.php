@@ -4,11 +4,24 @@
   'forceShowSub' => false,
   'filterTerms' => [],
   'filterAll' => false,
-  // default id modal; parent bisa override
   'modalId' => 'view-lampiran-panel',
+  // ⬇️ props baru dengan default null
+  'ownerId' => null,
+  'isRegular' => null,
 ])
 
 @php
+    // ⬇️ fallback kalau tidak dipassing dari parent
+    if (is_null($ownerId)) {
+        $ownerId = $lampiran->regular_id ?: $lampiran->berkas_id;
+    }
+    if (is_null($isRegular)) {
+        $isRegular = filled($lampiran->regular_id);
+    }
+@endphp
+
+@php
+    use Illuminate\Support\Facades\Gate;
     use Filament\Facades\Filament;
     use Illuminate\Support\Facades\Storage;
 
@@ -46,9 +59,10 @@
     $isCompletelyMissing = ! $branchHasFile;
 
 
-    // URL untuk buka file jika node ini punya file sendiri
     $openUrl = $hasFile
-        ? route('media.berkas.lampiran', ['berkas' => $lampiran->berkas_id, 'lampiran' => $lampiran->id])
+        ? ($isRegular
+            ? route('media.regular.lampiran', ['regular' => $ownerId, 'lampiran' => $lampiran->id])
+            : route('media.berkas.lampiran',   ['berkas'  => $ownerId, 'lampiran' => $lampiran->id]))
         : null;
 
     // ── PARSE KEYWORDS (robust: pecah CSV di semua level)
@@ -80,11 +94,9 @@
     $indent = 'pl-' . min(($level * 4), 16);
 
     // URL helper
-    $createUrl = \App\Filament\Resources\LampiranResource::getUrl('create', [
-        'parent_id' => $lampiran->id,
-        'berkas_id' => $lampiran->berkas_id,
-    ]);
-
+    $createUrl = \App\Filament\Resources\LampiranResource::getUrl('create',
+        ['parent_id' => $lampiran->id] + ($isRegular ? ['regular_id' => $ownerId] : ['berkas_id' => $ownerId])
+    );
     $canUpdate = auth()->user()?->can('update', $lampiran) ?? false;
 
     // === BACA STATE FILTER dari tabel (TagsInput q.terms + toggle q.all)
@@ -245,8 +257,8 @@
 
                     @can('create', \App\Models\Lampiran::class)
                     <a href="{{ $createUrl }}" @click.stop
-                        class="text-xs px-2 py-0.5 rounded border border-gray-200 hover:bg-gray-50">
-                        + Sub
+                    class="text-xs px-2 py-0.5 rounded border border-gray-200 hover:bg-gray-50">
+                    + Sub
                     </a>
                     @endcan
 
@@ -293,7 +305,7 @@
                         title="Lihat"
                         @click.stop.prevent="
                             // 1) suruh viewer memuat id ini (tanpa re-render induk)
-                            $wire.dispatch('open-lampiran-view', { id: {{ $lampiran->id }} })
+                            window.Livewire.dispatch('open-lampiran-view', { id: {{ $lampiran->id }} })
                             // 2) buka modalnya
                             $dispatch('open-modal', { id: '{{ $modalId }}' })
                         ">
@@ -308,7 +320,10 @@
 
                     @if ($canDeleteBtn)
                     <button type="button" class="ml-2 text-gray-400 hover:text-red-600" title="Hapus lampiran"
-                            @click.stop="$dispatch('set-lampiran-to-delete', { id: {{ $lampiran->id }}, berkasId: {{ $lampiran->berkas_id }} })">
+                        @click.stop="$dispatch('set-lampiran-to-delete', { 
+                            id: {{ $lampiran->id }}, 
+                            ownerId: {{ $ownerId ?? ($lampiran->berkas_id ?: $lampiran->regular_id) }}
+                        })">
                         <x-filament::icon icon="heroicon-m-trash" class="w-4 h-4" />
                     </button>
                     @endif
@@ -342,6 +357,8 @@
                                 'filterAll'     => $modeAll ?? $filterAll,
                                 'forceShowSub'  => $forceShowSub,   
                                 'modalId'       => $modalId,
+                                'ownerId'       => $ownerId,
+                                'isRegular'     => $isRegular,
                             ])
                         @endforeach
                     </div>
@@ -353,9 +370,11 @@
     {{-- Parent tidak cocok: tampilkan anak-anak yang masih match di LEVEL YANG SAMA --}}
     @foreach ($children as $child)
         @include('tables.rows.partials.lampiran-card-node', [
-            'lampiran' => $child,
-            'level'    => $level,  
-            'modalId'  => $modalId, 
+            'lampiran'  => $child,
+            'level'     => $level,  
+            'modalId'   => $modalId, 
+            'ownerId'   => $ownerId,
+            'isRegular' => $isRegular,
         ])
     @endforeach
 @endif

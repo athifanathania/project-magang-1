@@ -18,7 +18,7 @@ class Lampiran extends Model
     {
         return LogOptions::defaults()
             ->useLogName('web')
-            ->logOnly(['nama','file','keywords','parent_id','berkas_id'])
+            ->logOnly(['nama','file','keywords','parent_id','berkas_id','regular_id'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs()
             ->setDescriptionForEvent(fn (string $e) => "Lampiran {$e}");
@@ -26,9 +26,33 @@ class Lampiran extends Model
 
     protected $guarded = [];
 
-    public function berkas()
+    public function berkas()  { return $this->belongsTo(\App\Models\Berkas::class); }
+    public function regular() { return $this->belongsTo(\App\Models\Regular::class); }
+
+    /** Owner dinamis (Berkas atau Regular) */
+    public function owner(): ?\Illuminate\Database\Eloquent\Model
     {
-        return $this->belongsTo(\App\Models\Berkas::class);
+        return $this->berkas ?? $this->regular ?? null;
+    }
+
+    /** URL media dinamis untuk tombol “Buka” */
+    public function mediaUrl(): ?string
+    {
+        if (!filled($this->file)) return null;
+
+        if ($this->berkas_id) {
+            return route('media.berkas.lampiran', [
+                'berkas'   => $this->berkas_id,
+                'lampiran' => $this->id,
+            ]);
+        }
+        if ($this->regular_id) {
+            return route('media.regular.lampiran', [
+                'regular'  => $this->regular_id,
+                'lampiran' => $this->id,
+            ]);
+        }
+        return null;
     }
 
     public function parent()
@@ -71,7 +95,19 @@ class Lampiran extends Model
                 }
             }
             if ($m->parent_id) {
-                $m->berkas_id = static::whereKey($m->parent_id)->value('berkas_id');
+                $p = static::select('berkas_id','regular_id')->find($m->parent_id);
+                if ($p) {
+                    $m->berkas_id  = $p->berkas_id;
+                    $m->regular_id = $p->regular_id;
+                }
+            }
+            // Validasi eksklusif satu owner (persis satu harus terisi)
+            $hasB = filled($m->berkas_id);
+            $hasR = filled($m->regular_id);
+            if ($hasB === $hasR) {
+                throw ValidationException::withMessages([
+                    'owner' => 'Lampiran harus terikat persis ke salah satu: Berkas atau Regular.',
+                ]);
             }
         });
 
@@ -350,10 +386,4 @@ class Lampiran extends Model
         }
         return $out;
     }
-
-    public function regular()
-    {
-        return $this->belongsTo(\App\Models\Regular::class, 'regular_id');
-    }
-
 }

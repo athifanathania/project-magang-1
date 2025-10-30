@@ -59,12 +59,25 @@ class MediaController extends Controller
         $versions = $lampiran->file_versions ?? [];
         abort_unless(isset($versions[$index]), 404);
 
-        $v = $versions[$index];
-        abort_unless(Storage::disk('private')->exists($v['path'] ?? ''), 404);
+        $v  = $versions[$index];
+        $fp = $v['file_path'] ?? null;
+
+        abort_unless($fp && Storage::disk('private')->exists($fp), 404);
 
         return Storage::disk('private')->download(
-            $v['path'],
-            $v['filename'] ?? basename($v['path'])
+            $fp,
+            $v['filename'] ?? basename($fp)
         );
     }
+
+    public function lampiranRegular(\App\Models\Regular $regular, \App\Models\Lampiran $lampiran)
+    {
+        abort_if($lampiran->regular_id !== $regular->id, 404);
+
+        $this->authorize('view', $regular); // sesuaikan policy/guard kamu
+
+        $path = (string) $lampiran->file;
+        return $this->streamFromDisks($path); // gunakan util yg sama seperti lampiran Berkas
+    }
+
 }
