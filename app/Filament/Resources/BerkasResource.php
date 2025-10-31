@@ -46,6 +46,8 @@ use App\Filament\Support\FileCell;
 use Illuminate\Validation\Rule;
 use Filament\Forms\Get;
 use Illuminate\Database\Eloquent\Model;
+use Filament\Tables\Enums\FiltersLayout;
+use Filament\Support\Enums\MaxWidth;
 
 class BerkasResource extends Resource
 {
@@ -194,10 +196,10 @@ class BerkasResource extends Resource
                 \Filament\Forms\Components\Section::make('Dokumen Pelengkap')
                     ->description('Kelola dokumen pelengkap melalui tombol "Tambah Lampiran" di panel tabel.'),
                 Section::make('Riwayat dokumen')
-                    ->visible(fn (string $context) => $context === 'view') // hanya muncul di modal View
+                    ->visible(fn (string $context) => $context === 'view')
                     ->schema([
                         ViewField::make('dokumen_history')
-                            ->view('tables.rows.berkas-history') // blade di langkah 3
+                            ->view('tables.rows.berkas-history')
                             ->columnSpanFull(),
                     ]),
 
@@ -207,21 +209,18 @@ class BerkasResource extends Resource
     public static function table(Table $table): Table
     {
         return static::applyRowClickPolicy($table)
-            // >>> default order: cust_name, lalu model (hanya kalau user belum set sort)
-            ->modifyQueryUsing(function (Builder $q) {
-                $hasSort = filled(request()->input('tableSortColumn'));
-                if (! $hasSort) {
-                    $q->orderBy('cust_name')->orderBy('model');
-                }
-            })   
+            ->persistFiltersInSession()
+            ->filtersLayout(\Filament\Tables\Enums\FiltersLayout::AboveContentCollapsible)
+            // ->filtersFormColumns(2)                         // opsional: bagi jadi 2 kolom
+            // ->filtersFormWidth(MaxWidth::SevenExtraLarge)
             ->columns([
                 TextColumn::make('cust_name')
                     ->label('Cust Name')
                     ->sortable()
                     ->limit(16)
                     ->tooltip(fn (?string $state) => $state)
-                    ->grow(false)                                   // << kunci agar tidak melebar
-                    ->width('8rem')                                 // opsional, bisa 7–10rem
+                    ->grow(false)                                  
+                    ->width('8rem')
                     ->extraHeaderAttributes(['class' => 'w-[8rem]'])
                     ->extraCellAttributes([
                         'class' => 'w-[8rem] max-w-[8rem] whitespace-nowrap truncate',
@@ -324,26 +323,22 @@ class BerkasResource extends Resource
                     Filter::make('q')
                         ->label('Cari')
                         ->form([
-                            TagsInput::make('terms')
-                                ->label('Kata kunci')
-                                ->placeholder('Ketik lalu Enter untuk menambah')
-                                ->reorderable()
-                                ->separator(',')
-                                ->live(debounce: 500)
-                                // >>> auto-apply tanpa klik Apply
-                                ->afterStateUpdated(function ($state, $set = null, $get = null, $refresh = null) {
-                                    // $refresh tersedia di Filament v3 → jalankan bila ada
-                                    if (is_callable($refresh)) $refresh();
-                                }),
+                            Forms\Components\Grid::make()
+                                ->columns(12) // 12 kolom grid
+                                ->schema([
+                                    TagsInput::make('terms')
+                                        ->label('Kata kunci')
+                                        ->placeholder('Ketik lalu Enter untuk menambah')
+                                        ->separator(',')
+                                        ->reorderable()
+                                        ->live(debounce: 300)
+                                        ->columnSpan(9),   // lebar 9/12
 
-                            Toggle::make('all')
-                                ->label('Cocokkan semua keyword (mode ALL)')
-                                ->inline(false)
-                                ->live()
-                                // >>> auto-apply saat toggle berubah
-                                ->afterStateUpdated(function ($state, $set = null, $get = null, $refresh = null) {
-                                    if (is_callable($refresh)) $refresh();
-                                }),
+                                    Toggle::make('all')
+                                        ->label('All keywords')
+                                        ->inline(true)     // toggle + label di satu baris
+                                        ->columnSpan(3),   // lebar 3/12 (di kanan)
+                                ]),
                         ])
                         ->query(function (Builder $query, array $data): void {
                             $terms = collect($data['terms'] ?? [])
@@ -430,7 +425,6 @@ class BerkasResource extends Resource
                         ->modalWidth('7xl')
                         ->tooltip('Lihat'),
 
-                    // Edit/Delete: hanya Admin/Editor – gunakan nullsafe (?? false)
                     EditAction::make()
                         ->label('')
                         ->icon('heroicon-m-pencil')
@@ -468,7 +462,7 @@ class BerkasResource extends Resource
                 ]),
             ]);
     }
-
+    
     public static function getRelations(): array
     {
         //

@@ -136,26 +136,36 @@
     ])
 >
 @php
-    // --- Deteksi resource/halaman yang sedang dibuka ---
     $resourceClass  = method_exists($this, 'getResource') ? $this->getResource() : null;
 
     $isBerkasPage   = ($resourceClass === \App\Filament\Resources\BerkasResource::class)
         || request()->routeIs('filament.*.resources.berkas.*');
 
+    $isRegularPage  = ($resourceClass === \App\Filament\Resources\RegularResource::class)
+        || request()->routeIs('filament.*.resources.regulars.*');
+
+    $isEventPage    = ($resourceClass === \App\Filament\Resources\EventResource::class)
+        || request()->routeIs('filament.*.resources.events.*');   // <-- tambah deteksi Event
+
     $isLampiranPage = ($resourceClass === \App\Filament\Resources\LampiranResource::class)
         || request()->routeIs('filament.*.resources.lampirans.*');
 
-    // Hanya tampilkan bar di Berkas/Lampiran (bukan Users, dsb)
-    $showCustomBar  = $isBerkasPage || $isLampiranPage;
+    $showCustomBar  = $isBerkasPage || $isRegularPage || $isEventPage || $isLampiranPage;
 
-    // Siapkan variabel
-    $lampiranCocokGlobal  = null;
-    $totalLampiranGlobal  = null;
-    $totalBerkas          = null;
-    $filteredBerkas       = null;
+    // Tentukan kolom owner untuk subset Lampiran per halaman
+    $ownerColumn = null;
+    if ($isRegularPage)      $ownerColumn = 'regular_id';
+    elseif ($isEventPage)    $ownerColumn = 'event_id';
+    elseif ($isBerkasPage)   $ownerColumn = 'berkas_id';   // kalau ingin di Berkas juga spesifik
+
+    // Variabel hasil
+    $lampiranMatchLocal   = null; // yg cocok filter (q)
+    $lampiranTotalLocal   = null; // total dalam halaman ini
+    $totalDokumen         = null;
+    $filteredDokumen      = null;
 
     if ($showCustomBar) {
-        // === Hitung LAMPIRAN (dipakai di Berkas & Lampiran) ===
+        // --- Ambil state filter 'q' (kalau ada) ---
         $filtersState = method_exists($this, 'getTableFiltersForm')
             ? $this->getTableFiltersForm()->getRawState()
             : [];
@@ -167,71 +177,81 @@
 
         $modeAll = (bool) data_get($filtersState, 'q.all', false);
 
-        $lampiranQuery = \App\Models\Lampiran::query();
+        // --- Ambil ID dokumen yang sedang ditampilkan di halaman ini (mengikuti filter tabel) ---
+        //  fallback ke getTableQuery() kalau getFilteredTableQuery() tak tersedia
+        $docQuery = method_exists($this, 'getFilteredTableQuery')
+            ? $this->getFilteredTableQuery()
+            : (method_exists($this, 'getTableQuery') ? $this->getTableQuery() : null);
 
+        $docIds = collect();
+        if ($ownerColumn && $docQuery) {
+            // pakai pluck id dari query yang sudah terfilter
+            $docIds = $docQuery->clone()->pluck('id');
+        }
+
+        // --- Bangun query Lampiran lokal (terbatas ke owner halaman) ---
+        $lampiranBase = \App\Models\Lampiran::query();
+        if ($ownerColumn && $docIds->isNotEmpty()) {
+            $lampiranBase->whereIn($ownerColumn, $docIds);
+        } elseif ($ownerColumn) {
+            // tidak ada dokumen pada halaman/hasil filter -> nol
+            $lampiranBase->whereRaw('1=0');
+        }
+
+        // TOTAL lokal (semua lampiran milik dokumen halaman ini)
+        $lampiranTotalLocal = (clone $lampiranBase)->count();
+
+        // MATCH lokal (ikut filter q bila ada)
         if ($terms->isNotEmpty()) {
-            $lampiranQuery->where(function ($q) use ($terms, $modeAll) {
+            $lampiranBase->where(function ($q) use ($terms, $modeAll) {
                 $apply = function ($sub, string $t) {
                     $like = '%'.mb_strtolower($t).'%';
                     $sub->whereRaw('LOWER(nama) LIKE ?', [$like])
                         ->orWhereRaw('LOWER(CAST(keywords AS CHAR)) LIKE ?', [$like]);
                 };
-
                 if ($modeAll) {
-                    foreach ($terms as $t) {
-                        $q->where(fn ($sub) => $apply($sub, $t));
-                    }
+                    foreach ($terms as $t) $q->where(fn ($sub) => $apply($sub, $t));
                 } else {
                     $q->where(function ($or) use ($terms, $apply) {
-                        foreach ($terms as $t) {
-                            $or->orWhere(fn ($sub) => $apply($sub, $t));
-                        }
+                        foreach ($terms as $t) $or->orWhere(fn ($sub) => $apply($sub, $t));
                     });
                 }
             });
         }
+        $lampiranMatchLocal = (clone $lampiranBase)->count();
 
-        $lampiranCocokGlobal = (clone $lampiranQuery)->count();
-        $totalLampiranGlobal = \App\Models\Lampiran::query()->count();
-
-        // === Hitung DOKUMEN hanya untuk halaman Berkas ===
-        if ($isBerkasPage) {
-            $totalBerkas = method_exists($this, 'getTableQuery')
-                ? $this->getTableQuery()->count()
-                : null;
-
-            $filteredBerkas = method_exists($this, 'getFilteredTableQuery')
-                ? $this->getFilteredTableQuery()->count()
-                : (isset($records) && method_exists($records, 'total')
-                    ? $records->total()
-                    : (isset($records) ? $records->count() : null));
+        // --- Dokumen (header kiri) tampil di Berkas & Regular & Event ---
+        if ($isBerkasPage || $isRegularPage || $isEventPage) {
+            $totalDokumen = $docQuery?->clone()?->count();
+            $filteredDokumen = isset($records) && method_exists($records, 'total')
+                ? $records->total()
+                : (isset($records) ? $records->count() : null);
         }
     }
 @endphp
 
 @if ($showCustomBar)
-    <div class="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600">
-        {{-- Dokumen: hanya tampil di halaman Dokumen/Berkas --}}
-        @if ($isBerkasPage)
-            <span>
-                <strong>Dokumen:</strong>
-                <span class="font-medium">{{ $filteredBerkas }}</span>
-                @isset($totalBerkas)
-                    dari <span class="font-medium">{{ $totalBerkas }}</span>
-                @endisset
-            </span>
-            <span class="text-gray-400">|</span>
-        @endif
+  <div class="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600">
+      {{-- Dokumen: tampil di Berkas, Regular, Event --}}
+      @if ($isBerkasPage || $isRegularPage || $isEventPage)
+          <span>
+              <strong>Dokumen:</strong>
+              <span class="font-medium">{{ $filteredDokumen }}</span>
+              @isset($totalDokumen)
+                  dari <span class="font-medium">{{ $totalDokumen }}</span>
+              @endisset
+          </span>
+          <span class="text-gray-400">|</span>
+      @endif
 
-        {{-- Lampiran: tampil di Berkas & Lampiran --}}
-        <span>
-            <strong>Lampiran:</strong>
-            <span class="font-medium">{{ $lampiranCocokGlobal }}</span>
-            dari <span class="font-medium">{{ $totalLampiranGlobal }}</span>
-        </span>
-    </div>
+      {{-- Lampiran: khusus subset milik dokumen di halaman ini --}}
+      <span>
+          <strong>Lampiran:</strong>
+          <span class="font-medium">{{ $lampiranMatchLocal }}</span>
+          dari <span class="font-medium">{{ $lampiranTotalLocal }}</span>
+      </span>
+  </div>
 @endif
-
 
     <x-filament-tables::container>
         <div

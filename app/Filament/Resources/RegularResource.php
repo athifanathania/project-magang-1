@@ -78,8 +78,132 @@ class RegularResource extends Resource
     {
         $t = \App\Filament\Resources\BerkasResource::table($table);
 
-        // Ganti action yang bentrok
-        return $t->actions([
+        $tbl = (new \App\Models\Regular)->getTable();
+
+        return $t
+        ->persistFiltersInSession()
+        ->filtersLayout(\Filament\Tables\Enums\FiltersLayout::AboveContentCollapsible)
+            ->filters([
+                // Select: Cust Name
+                \Filament\Tables\Filters\SelectFilter::make('cust_name')
+                    ->label('Cust Name')
+                    ->options(fn () =>
+                        \App\Models\Regular::query()
+                            ->whereNotNull('cust_name')
+                            ->distinct()
+                            ->orderBy('cust_name')
+                            ->pluck('cust_name', 'cust_name')
+                            ->all()
+                    )
+                    ->preload()
+                    ->searchable(),
+
+                // Select: Model
+                \Filament\Tables\Filters\SelectFilter::make('model')
+                    ->label('Model')
+                    ->options(fn () =>
+                        \App\Models\Regular::query()
+                            ->whereNotNull('model')
+                            ->distinct()
+                            ->orderBy('model')
+                            ->pluck('model', 'model')
+                            ->all()
+                    )
+                    ->preload()
+                    ->searchable(),
+
+                // Select: Part No (kode_berkas)
+                \Filament\Tables\Filters\SelectFilter::make('kode_berkas')
+                    ->label('Part No')
+                    ->options(fn () =>
+                        \App\Models\Regular::query()
+                            ->whereNotNull('kode_berkas')
+                            ->distinct()
+                            ->orderBy('kode_berkas')
+                            ->pluck('kode_berkas', 'kode_berkas')
+                            ->all()
+                    )
+                    ->preload()
+                    ->searchable(),
+
+                \Filament\Tables\Filters\Filter::make('q')
+                    ->label('Cari')
+                    ->form([
+                        \Filament\Forms\Components\Grid::make()
+                            ->columns(12)
+                            ->schema([
+                                \Filament\Forms\Components\TagsInput::make('terms')
+                                    ->label('Kata kunci')
+                                    ->placeholder('Ketik lalu Enter untuk menambah')
+                                    ->separator(',')
+                                    ->reorderable()
+                                    ->live(debounce: 300)
+                                    ->columnSpan(9),
+
+                                \Filament\Forms\Components\Toggle::make('all')
+                                    ->label('All keywords')
+                                    ->inline(true)        // toggle + label satu baris, di kanan
+                                    ->columnSpan(3),
+                            ]),
+                    ])
+                    ->query(function (\Illuminate\Database\Eloquent\Builder $query, array $data) use ($tbl): void {
+                        $terms = collect($data['terms'] ?? [])
+                            ->filter(fn ($t) => is_string($t) && trim($t) !== '')
+                            ->map(fn ($t) => trim($t))
+                            ->unique()
+                            ->values()
+                            ->all();
+
+                        if (empty($terms)) return;
+
+                        $modeAll = filter_var($data['all'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
+                        $buildOneTermClause = function (\Illuminate\Database\Eloquent\Builder $q2, string $term) use ($tbl): void {
+                            $like = '%' . mb_strtolower($term) . '%';
+
+                            $q2->where(function (\Illuminate\Database\Eloquent\Builder $g) use ($like, $tbl) {
+                                $g->whereRaw("LOWER({$tbl}.kode_berkas) LIKE ?", [$like])
+                                ->orWhereRaw("LOWER({$tbl}.cust_name) LIKE ?", [$like])
+                                ->orWhereRaw("LOWER({$tbl}.model) LIKE ?", [$like])
+                                ->orWhereRaw("LOWER({$tbl}.nama) LIKE ?", [$like])
+                                ->orWhereRaw("LOWER({$tbl}.detail) LIKE ?", [$like])
+                                ->orWhereRaw("LOWER({$tbl}.dokumen) LIKE ?", [$like])
+                                ->orWhereRaw("LOWER(CAST({$tbl}.keywords AS CHAR)) LIKE ?", [$like]);
+
+                                // relasi lampirans
+                                $g->orWhere(function (\Illuminate\Database\Eloquent\Builder $q) use ($like) {
+                                    $q->whereHas('lampirans', function (\Illuminate\Database\Eloquent\Builder $l) use ($like) {
+                                        $l->where(function (\Illuminate\Database\Eloquent\Builder $lx) use ($like) {
+                                            $lx->whereRaw('LOWER(lampirans.nama) LIKE ?', [$like])
+                                            ->orWhereRaw('LOWER(lampirans.file) LIKE ?', [$like])
+                                            ->orWhereRaw('LOWER(CAST(lampirans.keywords AS CHAR)) LIKE ?', [$like]);
+                                        });
+                                    });
+                                });
+                            });
+                        };
+
+                        $query->where(function (\Illuminate\Database\Eloquent\Builder $outer) use ($terms, $modeAll, $buildOneTermClause) {
+                            if ($modeAll) {
+                                foreach ($terms as $term) {
+                                    $outer->where(fn ($sub) => $buildOneTermClause($sub, $term));
+                                }
+                            } else {
+                                $outer->where(function ($subOr) use ($terms, $buildOneTermClause) {
+                                    foreach ($terms as $term) {
+                                        $subOr->orWhere(fn ($sub) => $buildOneTermClause($sub, $term));
+                                    }
+                                });
+                            }
+                        });
+                    })
+                    ->indicateUsing(function (array $data): ?string {
+                        $tags = collect($data['terms'] ?? [])
+                            ->filter(fn ($t) => is_string($t) && trim($t) !== '');
+                        return $tags->isNotEmpty() ? 'Cari: '.$tags->implode(', ') : null;
+                    }),
+                ]) 
+        ->actions([
             \Filament\Tables\Actions\Action::make('lampiran')
                 ->label('')
                 ->icon('heroicon-m-paper-clip')

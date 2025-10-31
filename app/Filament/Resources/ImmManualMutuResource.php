@@ -109,7 +109,7 @@ class ImmManualMutuResource extends Resource
                 Tables\Columns\TextColumn::make('nama_dokumen')
                     ->label('Nama Dokumen')->wrap()
                     ->extraCellAttributes(['class'=>'max-w-[28rem] whitespace-normal break-words'])
-                    ->sortable()->searchable(),
+                    ->sortable(),
 
                 // ⬇️ Tambahan kolom KATA KUNCI
                 Tables\Columns\ViewColumn::make('keywords_view')
@@ -164,31 +164,59 @@ class ImmManualMutuResource extends Resource
                 Tables\Filters\Filter::make('q')
                     ->label('Cari')
                     ->form([
-                        Forms\Components\TagsInput::make('terms')->label('Kata kunci')->separator(',')->reorderable(),
-                        Forms\Components\Toggle::make('all')->label('Cocokkan semua keyword (mode ALL)')->inline(false),
+                        Forms\Components\TagsInput::make('terms')
+                            ->label('Kata kunci')->separator(',')->reorderable(),
+                        Forms\Components\Toggle::make('all')
+                            ->label('Cocokkan semua keyword (mode ALL)')->inline(false),
                     ])
                     ->query(function (Builder $query, array $data) use ($tbl) {
                         $terms = collect($data['terms'] ?? [])
-                            ->filter(fn($t)=>is_string($t)&&trim($t)!=='')
-                            ->map(fn($t)=>trim($t))->unique()->values()->all();
+                            ->filter(fn ($t) => is_string($t) && trim($t) !== '')
+                            ->map(fn ($t) => trim($t))
+                            ->unique()->values()->all();
+
                         if (empty($terms)) return;
 
                         $modeAll = (bool) ($data['all'] ?? false);
-                        $one = function (Builder $q, string $term) use ($tbl) {
+
+                        $one = function (Builder $q2, string $term) use ($tbl): void {
                             $like = '%' . mb_strtolower($term) . '%';
-                            $q->whereRaw("LOWER({$tbl}.nama_dokumen) LIKE ?", [$like])
-                            ->orWhereRaw("LOWER({$tbl}.file) LIKE ?", [$like])
-                            ->orWhereRaw("LOWER(CAST({$tbl}.keywords AS CHAR)) LIKE ?", [$like]);
+
+                            $q2->where(function (Builder $g) use ($like, $tbl) {
+                                // cari di induk (tabel imm_manual_mutu)
+                                $g->whereRaw("LOWER({$tbl}.nama_dokumen) LIKE ?", [$like])
+                                ->orWhereRaw("LOWER({$tbl}.file) LIKE ?", [$like])
+                                ->orWhereRaw("LOWER(CAST({$tbl}.keywords AS CHAR)) LIKE ?", [$like])
+
+                                // cari di LAMPIRAN (tabel imm_lampirans) — PENTING: pakai relasi yg BENAR
+                                ->orWhereHas('lampiransAll', function (Builder $l) use ($like) {
+                                    $l->where(function (Builder $lx) use ($like) {
+                                        $lx->whereRaw('LOWER(imm_lampirans.nama) LIKE ?', [$like])
+                                            ->orWhereRaw('LOWER(imm_lampirans.file) LIKE ?', [$like])
+                                            ->orWhereRaw('LOWER(CAST(imm_lampirans.keywords AS CHAR)) LIKE ?', [$like]);
+                                    });
+                                });
+                            });
                         };
 
                         $query->where(function (Builder $outer) use ($terms, $modeAll, $one) {
-                            if ($modeAll) foreach ($terms as $t) $outer->where(fn($qq)=>$one($qq,$t));
-                            else $outer->where(fn($qq)=>collect($terms)->each(fn($t)=>$qq->orWhere(fn($q)=>$one($q,$t))));
+                            if ($modeAll) {
+                                foreach ($terms as $t) {
+                                    $outer->where(fn (Builder $qq) => $one($qq, $t));
+                                }
+                            } else {
+                                $outer->where(function (Builder $qq) use ($terms, $one) {
+                                    foreach ($terms as $t) {
+                                        $qq->orWhere(fn (Builder $q) => $one($q, $t));
+                                    }
+                                });
+                            }
                         });
                     })
-                    ->indicateUsing(fn (array $data) =>
-                        ($tags = collect($data['terms'] ?? [])->filter()->implode(', ')) ? "Cari: $tags" : null
-                    ),
+                    ->indicateUsing(function (array $data) {
+                        $tags = collect($data['terms'] ?? [])->filter()->implode(', ');
+                        return $tags ? "Cari: {$tags}" : null;
+                    }),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make()->label('')->icon('heroicon-m-eye')->tooltip('Lihat (riwayat)')->modalWidth('7xl'),
