@@ -81,7 +81,7 @@ class RegularResource extends Resource
         $tbl = (new \App\Models\Regular)->getTable();
 
         return $t
-        ->persistFiltersInSession()
+        // ->persistFiltersInSession()
         ->filtersLayout(\Filament\Tables\Enums\FiltersLayout::AboveContentCollapsible)
             ->filters([
                 // Select: Cust Name

@@ -101,7 +101,7 @@ class ImmFormulirResource extends Resource
         $tbl = (new \App\Models\ImmFormulir)->getTable();
 
         return static::applyRowClickPolicy($table)   
-            ->persistFiltersInSession()
+            // ->persistFiltersInSession()
             ->columns([
                 Tables\Columns\TextColumn::make('nama_dokumen')
                     ->label('Nama Dokumen')->wrap()

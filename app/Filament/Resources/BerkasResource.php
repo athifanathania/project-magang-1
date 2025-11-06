@@ -210,7 +210,7 @@ class BerkasResource extends Resource
     public static function table(Table $table): Table
     {
         return static::applyRowClickPolicy($table)
-            ->persistFiltersInSession()
+            // ->persistFiltersInSession()
             ->filtersLayout(\Filament\Tables\Enums\FiltersLayout::AboveContentCollapsible)
             ->columns([
                 TextColumn::make('cust_name')

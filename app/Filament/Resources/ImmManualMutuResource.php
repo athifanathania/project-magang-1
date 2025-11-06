@@ -105,7 +105,7 @@ class ImmManualMutuResource extends Resource
         $tbl = (new ImmManualMutu)->getTable();
 
         return static::applyRowClickPolicy($table)
-            ->persistFiltersInSession() 
+            // ->persistFiltersInSession() 
             ->columns([
                 Tables\Columns\TextColumn::make('nama_dokumen')
                     ->label('Nama Dokumen')->wrap()
