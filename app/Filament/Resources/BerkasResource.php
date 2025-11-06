@@ -211,8 +211,6 @@ class BerkasResource extends Resource
         return static::applyRowClickPolicy($table)
             ->persistFiltersInSession()
             ->filtersLayout(\Filament\Tables\Enums\FiltersLayout::AboveContentCollapsible)
-            // ->filtersFormColumns(2)                         // opsional: bagi jadi 2 kolom
-            // ->filtersFormWidth(MaxWidth::SevenExtraLarge)
             ->columns([
                 TextColumn::make('cust_name')
                     ->label('Cust Name')

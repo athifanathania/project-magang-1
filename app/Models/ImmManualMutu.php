@@ -43,16 +43,16 @@ class ImmManualMutu extends Model
         return 'imm/manual_mutu';
     }
 
-    public function lampiransAll()   // <— BARU (atau boleh rename dari immLampirans)
+    public function lampirans()
     {
-        return $this->morphMany(ImmLampiran::class, 'documentable');
+        return $this->morphMany(\App\Models\ImmLampiran::class, 'documentable');
     }
 
-    public function rootLampirans()  // <— BARU (pengganti rootImmLampirans)
+    public function rootLampirans()
     {
-        return $this->lampiransAll()->whereNull('parent_id');
+        return $this->lampirans()->whereNull('parent_id');
     }
 
-    public function immLampirans() { return $this->lampiransAll(); }
+    public function immLampirans()     { return $this->lampirans(); }
     public function rootImmLampirans() { return $this->rootLampirans(); }
 }

@@ -104,7 +104,9 @@ class ImmManualMutuResource extends Resource
     {
         $tbl = (new ImmManualMutu)->getTable();
 
-        return static::applyRowClickPolicy($table)   
+        return static::applyRowClickPolicy($table)
+            ->persistFiltersInSession() 
+            ->filtersLayout(\Filament\Tables\Enums\FiltersLayout::AboveContentCollapsible) 
             ->columns([
                 Tables\Columns\TextColumn::make('nama_dokumen')
                     ->label('Nama Dokumen')->wrap()
@@ -161,7 +163,7 @@ class ImmManualMutuResource extends Resource
                     ->extraAttributes(['class'=>'text-blue-600 hover:underline']),
             ])
             ->filters([
-                Tables\Filters\Filter::make('q')
+                \Filament\Tables\Filters\Filter::make('q')
                     ->label('Cari')
                     ->form([
                         Forms\Components\TagsInput::make('terms')
@@ -169,46 +171,49 @@ class ImmManualMutuResource extends Resource
                         Forms\Components\Toggle::make('all')
                             ->label('Cocokkan semua keyword (mode ALL)')->inline(false),
                     ])
-                    ->query(function (Builder $query, array $data) use ($tbl) {
+                    ->query(function (Builder $query, array $data) use ($tbl): void {
                         $terms = collect($data['terms'] ?? [])
                             ->filter(fn ($t) => is_string($t) && trim($t) !== '')
                             ->map(fn ($t) => trim($t))
-                            ->unique()->values()->all();
+                            ->unique()
+                            ->values()
+                            ->all();
 
                         if (empty($terms)) return;
 
                         $modeAll = (bool) ($data['all'] ?? false);
 
-                        $one = function (Builder $q2, string $term) use ($tbl): void {
-                            $like = '%' . mb_strtolower($term) . '%';
+                        // 💡 pakai nama tabel anak dari modelnya
+                        $childTbl = (new \App\Models\ImmLampiran)->getTable();
 
-                            $q2->where(function (Builder $g) use ($like, $tbl) {
-                                // cari di induk (tabel imm_manual_mutu)
+                        $buildOne = function (Builder $q2, string $term) use ($tbl, $childTbl): void {
+                            $like = '%'.mb_strtolower($term).'%';
+
+                            $q2->where(function (Builder $g) use ($like, $tbl, $childTbl) {
+                                // Induk
                                 $g->whereRaw("LOWER({$tbl}.nama_dokumen) LIKE ?", [$like])
                                 ->orWhereRaw("LOWER({$tbl}.file) LIKE ?", [$like])
-                                ->orWhereRaw("LOWER(CAST({$tbl}.keywords AS CHAR)) LIKE ?", [$like])
+                                ->orWhereRaw("LOWER(CAST({$tbl}.keywords AS CHAR)) LIKE ?", [$like]);
 
-                                // cari di LAMPIRAN (tabel imm_lampirans) — PENTING: pakai relasi yg BENAR
-                                ->orWhereHas('lampiransAll', function (Builder $l) use ($like) {
-                                    $l->where(function (Builder $lx) use ($like) {
-                                        $lx->whereRaw('LOWER(imm_lampirans.nama) LIKE ?', [$like])
-                                            ->orWhereRaw('LOWER(imm_lampirans.file) LIKE ?', [$like])
-                                            ->orWhereRaw('LOWER(CAST(imm_lampirans.keywords AS CHAR)) LIKE ?', [$like]);
+                                // Relasi (dalam satu kurung or)
+                                $g->orWhere(function (Builder $q) use ($like, $childTbl) {
+                                    $q->whereHas('lampirans', function (Builder $l) use ($like, $childTbl) {
+                                        $l->where(function (Builder $lx) use ($like, $childTbl) {
+                                            $lx->whereRaw("LOWER({$childTbl}.nama) LIKE ?",  [$like])
+                                            ->orWhereRaw("LOWER({$childTbl}.file) LIKE ?",  [$like])
+                                            ->orWhereRaw("LOWER(CAST({$childTbl}.keywords AS CHAR)) LIKE ?", [$like]);
+                                        });
                                     });
                                 });
                             });
                         };
 
-                        $query->where(function (Builder $outer) use ($terms, $modeAll, $one) {
+                        $query->where(function (Builder $outer) use ($terms, $modeAll, $buildOne) {
                             if ($modeAll) {
-                                foreach ($terms as $t) {
-                                    $outer->where(fn (Builder $qq) => $one($qq, $t));
-                                }
+                                foreach ($terms as $t) $outer->where(fn (Builder $sub) => $buildOne($sub, $t));
                             } else {
-                                $outer->where(function (Builder $qq) use ($terms, $one) {
-                                    foreach ($terms as $t) {
-                                        $qq->orWhere(fn (Builder $q) => $one($q, $t));
-                                    }
+                                $outer->where(function (Builder $subOr) use ($terms, $buildOne) {
+                                    foreach ($terms as $t) $subOr->orWhere(fn (Builder $sub) => $buildOne($sub, $t));
                                 });
                             }
                         });

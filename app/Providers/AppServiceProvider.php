@@ -6,6 +6,7 @@ use Illuminate\Support\ServiceProvider;
 use Filament\Support\Facades\FilamentView;
 use Illuminate\Support\Facades\DB;   
 use Illuminate\Support\Facades\Log;
+use Illuminate\Database\Eloquent\Relations\Relation;
 
 class AppServiceProvider extends ServiceProvider
 {
