@@ -48,6 +48,7 @@ use Filament\Forms\Get;
 use Illuminate\Database\Eloquent\Model;
 use Filament\Tables\Enums\FiltersLayout;
 use Filament\Support\Enums\MaxWidth;
+use Filament\Forms\Components\Component;
 
 class BerkasResource extends Resource
 {
@@ -276,130 +277,104 @@ class BerkasResource extends Resource
                     ->extraCellAttributes(['class' => 'text-xs']),
             ]) 
             ->filters([
-                // === Filter select: Cust Name ===
-                Tables\Filters\SelectFilter::make('cust_name')
+                // === SAMAKAN DENGAN REGULAR: pakai SelectFilter ===
+                \Filament\Tables\Filters\SelectFilter::make('cust_name')
                     ->label('Cust Name')
-                    ->options(fn () =>
-                        \App\Models\Berkas::query()
-                            ->whereNotNull('cust_name')
-                            ->distinct()
-                            ->orderBy('cust_name')
-                            ->pluck('cust_name', 'cust_name')
-                            ->all()
-                    )
+                    ->options(fn () => \App\Models\Berkas::query()
+                        ->whereNotNull('cust_name')->distinct()->orderBy('cust_name')
+                        ->pluck('cust_name','cust_name')->all())
                     ->preload()
-                    ->searchable(), // bisa ketik untuk cari option
+                    ->searchable(),
 
-                // === Filter select: Model ===
-                Tables\Filters\SelectFilter::make('model')
+                \Filament\Tables\Filters\SelectFilter::make('model')
                     ->label('Model')
-                    ->options(fn () =>
-                        \App\Models\Berkas::query()
-                            ->whereNotNull('model')
-                            ->distinct()
-                            ->orderBy('model')
-                            ->pluck('model', 'model')
-                            ->all()
-                    )
+                    ->options(fn () => \App\Models\Berkas::query()
+                        ->whereNotNull('model')->distinct()->orderBy('model')
+                        ->pluck('model','model')->all())
                     ->preload()
                     ->searchable(),
 
-                // === Filter select: Part No (kode_berkas) ===
-                Tables\Filters\SelectFilter::make('kode_berkas')
+                \Filament\Tables\Filters\SelectFilter::make('kode_berkas')
                     ->label('Part No')
-                    ->options(fn () =>
-                        \App\Models\Berkas::query()
-                            ->whereNotNull('kode_berkas')
-                            ->distinct()
-                            ->orderBy('kode_berkas')
-                            ->pluck('kode_berkas', 'kode_berkas')
-                            ->all()
-                    )
+                    ->options(fn () => \App\Models\Berkas::query()
+                        ->whereNotNull('kode_berkas')->distinct()->orderBy('kode_berkas')
+                        ->pluck('kode_berkas','kode_berkas')->all())
                     ->preload()
                     ->searchable(),
 
-                    Filter::make('q')
-                        ->label('Cari')
-                        ->form([
-                            Forms\Components\Grid::make()
-                                ->columns(12) // 12 kolom grid
-                                ->schema([
-                                    TagsInput::make('terms')
-                                        ->label('Kata kunci')
-                                        ->placeholder('Ketik lalu Enter untuk menambah')
-                                        ->separator(',')
-                                        ->reorderable()
-                                        ->live(debounce: 300)
-                                        ->columnSpan(9),   // lebar 9/12
+                // === Filter "Cari" tetap realtime seperti sebelumnya ===
+                \Filament\Tables\Filters\Filter::make('q')
+                    ->label('Cari')
+                    ->form([
+                        \Filament\Forms\Components\Grid::make()->columns(12)->schema([
+                            \Filament\Forms\Components\TagsInput::make('terms')
+                                ->label('Kata kunci')
+                                ->placeholder('Ketik lalu Enter untuk menambah')
+                                ->separator(',')
+                                ->reorderable()
+                                ->live(debounce: 300)
+                                ->columnSpan(9),
+                            \Filament\Forms\Components\Toggle::make('all')
+                                ->label('All keywords')
+                                ->inline(true)
+                                ->live()
+                                ->columnSpan(3),
+                        ]),
+                    ])
+                    ->query(function (Builder $query, array $data): void {
+                        $terms = collect($data['terms'] ?? [])
+                            ->filter(fn ($t) => is_string($t) && trim($t) !== '')
+                            ->map(fn ($t) => trim($t))
+                            ->unique()
+                            ->values()
+                            ->all();
 
-                                    Toggle::make('all')
-                                        ->label('All keywords')
-                                        ->inline(true)     // toggle + label di satu baris
-                                        ->columnSpan(3),   // lebar 3/12 (di kanan)
-                                ]),
-                        ])
-                        ->query(function (Builder $query, array $data): void {
-                            $terms = collect($data['terms'] ?? [])
-                                ->filter(fn ($t) => is_string($t) && trim($t) !== '')
-                                ->map(fn ($t) => trim($t))
-                                ->unique()
-                                ->values()
-                                ->all();
+                        if (empty($terms)) return;
 
-                            if (empty($terms)) return;
+                        $modeAll = filter_var($data['all'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
-                            $modeAll = filter_var($data['all'] ?? false, FILTER_VALIDATE_BOOLEAN);
-
-                            $buildOneTermClause = function (Builder $q2, string $term): void {
-                                $like = '%' . mb_strtolower($term) . '%';
-
-                                // Grupkan semua OR dalam satu kurung
-                                $q2->where(function (Builder $g) use ($like) {
-                                    $g->whereRaw('LOWER(berkas.kode_berkas) LIKE ?', [$like])
-                                    ->orWhereRaw('LOWER(berkas.cust_name) LIKE ?', [$like])
-                                    ->orWhereRaw('LOWER(berkas.model) LIKE ?', [$like])
-                                    ->orWhereRaw('LOWER(berkas.nama) LIKE ?', [$like])
-                                    ->orWhereRaw('LOWER(berkas.detail) LIKE ?', [$like])
-                                    ->orWhereRaw('LOWER(berkas.dokumen) LIKE ?', [$like])
-                                    ->orWhereRaw('LOWER(CAST(berkas.keywords AS CHAR)) LIKE ?', [$like]);
-
-                                    // Relasi dibungkus agar tetap di dalam kurung
-                                    $g->orWhere(function (Builder $q) use ($like) {
-                                        $q->whereHas('lampirans', function (Builder $l) use ($like) {
-                                            $l->where(function (Builder $lx) use ($like) {
-                                                $lx->whereRaw('LOWER(lampirans.nama) LIKE ?', [$like])
+                        $buildOneTermClause = function (Builder $q2, string $term): void {
+                            $like = '%' . mb_strtolower($term) . '%';
+                            $q2->where(function (Builder $g) use ($like) {
+                                $g->whereRaw('LOWER(berkas.kode_berkas) LIKE ?', [$like])
+                                ->orWhereRaw('LOWER(berkas.cust_name) LIKE ?', [$like])
+                                ->orWhereRaw('LOWER(berkas.model) LIKE ?', [$like])
+                                ->orWhereRaw('LOWER(berkas.nama) LIKE ?', [$like])
+                                ->orWhereRaw('LOWER(berkas.detail) LIKE ?', [$like])
+                                ->orWhereRaw('LOWER(CAST(berkas.keywords AS CHAR)) LIKE ?', [$like])
+                                ->orWhere(function (Builder $q) use ($like) {
+                                    $q->whereHas('lampirans', function (Builder $l) use ($like) {
+                                        $l->where(function (Builder $lx) use ($like) {
+                                            $lx->whereRaw('LOWER(lampirans.nama) LIKE ?', [$like])
                                                 ->orWhereRaw('LOWER(lampirans.file) LIKE ?', [$like])
                                                 ->orWhereRaw('LOWER(CAST(lampirans.keywords AS CHAR)) LIKE ?', [$like]);
-                                            });
                                         });
                                     });
                                 });
-                            };
-
-                            $query->where(function (Builder $outer) use ($terms, $modeAll, $buildOneTermClause) {
-                                if ($modeAll) {
-                                    foreach ($terms as $term) {
-                                        $outer->where(fn (Builder $sub) => $buildOneTermClause($sub, $term));
-                                    }
-                                } else {
-                                    $outer->where(function (Builder $subOr) use ($terms, $buildOneTermClause) {
-                                        foreach ($terms as $term) {
-                                            $subOr->orWhere(fn (Builder $sub) => $buildOneTermClause($sub, $term));
-                                        }
-                                    });
-                                }
                             });
-                        })
-                        ->indicateUsing(function (array $data): ?string {
-                            $terms = collect($data['terms'] ?? [])
-                                ->filter(fn ($t) => is_string($t) && trim($t) !== '')
-                                ->map(fn ($t) => trim($t));
+                        };
 
-                            return $terms->isNotEmpty()
-                                ? 'Cari: ' . $terms->implode(', ')
-                                : null;
-                        }),
-                ])
+                        $query->where(function (Builder $outer) use ($terms, $modeAll, $buildOneTermClause) {
+                            if ($modeAll) {
+                                foreach ($terms as $term) {
+                                    $outer->where(fn (Builder $sub) => $buildOneTermClause($sub, $term));
+                                }
+                            } else {
+                                $outer->where(function (Builder $subOr) use ($terms, $buildOneTermClause) {
+                                    foreach ($terms as $term) {
+                                        $subOr->orWhere(fn (Builder $sub) => $buildOneTermClause($sub, $term));
+                                    }
+                                });
+                            }
+                        });
+                    })
+                    ->indicateUsing(function (array $data): ?string {
+                        $terms = collect($data['terms'] ?? [])
+                            ->filter(fn ($t) => is_string($t) && trim($t) !== '')
+                            ->map(fn ($t) => trim($t));
+                        return $terms->isNotEmpty() ? 'Cari: '.$terms->implode(', ') : null;
+                    }),
+            ])
                 ->actions([
                     Action::make('lampiran')
                         ->label('')

@@ -42,13 +42,16 @@ class ImmProsedur extends Model
         return 'imm/prosedur';
     }
 
-    public function immLampirans()
+    public function lampirans()
     {
-        return $this->morphMany(ImmLampiran::class, 'documentable');
+        return $this->morphMany(\App\Models\ImmLampiran::class, 'documentable');
     }
 
-    public function rootImmLampirans()
+    public function rootLampirans()
     {
-        return $this->immLampirans()->whereNull('parent_id');
+        return $this->lampirans()->whereNull('parent_id');
     }
+
+    public function immLampirans()     { return $this->lampirans(); }
+    public function rootImmLampirans() { return $this->rootLampirans(); }
 }

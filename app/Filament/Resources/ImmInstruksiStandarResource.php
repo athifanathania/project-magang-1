@@ -99,8 +99,10 @@ class ImmInstruksiStandarResource extends Resource
     public static function table(Table $table): Table
     {
         $tbl = (new \App\Models\ImmInstruksiStandar)->getTable();
+        $childTbl = (new \App\Models\ImmLampiran)->getTable();   
 
-        return static::applyRowClickPolicy($table)   
+        return static::applyRowClickPolicy($table)
+            ->persistFiltersInSession()   
             ->columns([
                 Tables\Columns\TextColumn::make('nama_dokumen')
                     ->label('Nama Dokumen')->wrap()
@@ -157,33 +159,49 @@ class ImmInstruksiStandarResource extends Resource
                     ->extraAttributes(['class'=>'text-blue-600 hover:underline']),
             ])
             ->filters([
-                Tables\Filters\Filter::make('q')
+                \Filament\Tables\Filters\Filter::make('q')
                     ->label('Cari')
                     ->form([
                         Forms\Components\TagsInput::make('terms')->label('Kata kunci')->separator(',')->reorderable(),
                         Forms\Components\Toggle::make('all')->label('Cocokkan semua keyword (mode ALL)')->inline(false),
                     ])
-                    ->query(function (Builder $query, array $data) use ($tbl) {
+                    ->query(function (Builder $query, array $data) use ($tbl, $childTbl) {
                         $terms = collect($data['terms'] ?? [])
                             ->filter(fn($t)=>is_string($t)&&trim($t)!=='')
                             ->map(fn($t)=>trim($t))->unique()->values()->all();
                         if (empty($terms)) return;
 
                         $modeAll = (bool) ($data['all'] ?? false);
-                        $one = function (Builder $q, string $term) use ($tbl) {
-                            $like = '%' . mb_strtolower($term) . '%';
-                            $q->whereRaw("LOWER({$tbl}.nama_dokumen) LIKE ?", [$like])
-                            ->orWhereRaw("LOWER({$tbl}.file) LIKE ?", [$like])
-                            ->orWhereRaw("LOWER(CAST({$tbl}.keywords AS CHAR)) LIKE ?", [$like]);
+
+                        $one = function (Builder $q2, string $term) use ($tbl, $childTbl) {
+                            $like = '%'.mb_strtolower($term).'%';
+                            $q2->where(function (Builder $g) use ($like, $tbl, $childTbl) {
+                                // Induk
+                                $g->whereRaw("LOWER({$tbl}.nama_dokumen) LIKE ?", [$like])
+                                ->orWhereRaw("LOWER({$tbl}.file) LIKE ?", [$like])
+                                ->orWhereRaw("LOWER(CAST({$tbl}.keywords AS CHAR)) LIKE ?", [$like])
+                                // Relasi lampirans (satu kurung OR)
+                                ->orWhere(function (Builder $q) use ($like, $childTbl) {
+                                    $q->whereHas('lampirans', function (Builder $l) use ($like, $childTbl) {
+                                        $l->where(function (Builder $lx) use ($like, $childTbl) {
+                                            $lx->whereRaw("LOWER({$childTbl}.nama) LIKE ?",  [$like])
+                                                ->orWhereRaw("LOWER({$childTbl}.file) LIKE ?",  [$like])
+                                                ->orWhereRaw("LOWER(CAST({$childTbl}.keywords AS CHAR)) LIKE ?", [$like]);
+                                        });
+                                    });
+                                });
+                            });
                         };
 
                         $query->where(function (Builder $outer) use ($terms, $modeAll, $one) {
                             if ($modeAll) foreach ($terms as $t) $outer->where(fn($qq)=>$one($qq,$t));
-                            else $outer->where(fn($qq)=>collect($terms)->each(fn($t)=>$qq->orWhere(fn($q)=>$one($q,$t))));
+                            else $outer->where(function ($subOr) use ($terms, $one) {
+                                foreach ($terms as $t) $subOr->orWhere(fn($qq)=>$one($qq,$t));
+                            });
                         });
                     })
                     ->indicateUsing(fn (array $data) =>
-                        ($tags = collect($data['terms'] ?? [])->filter()->implode(', ')) ? "Cari: $tags" : null
+                        ($tags = collect($data['terms'] ?? [])->filter()->implode(', ')) ? "Cari: {$tags}" : null
                     ),
             ])
             ->actions([

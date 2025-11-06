@@ -106,7 +106,6 @@ class ImmManualMutuResource extends Resource
 
         return static::applyRowClickPolicy($table)
             ->persistFiltersInSession() 
-            ->filtersLayout(\Filament\Tables\Enums\FiltersLayout::AboveContentCollapsible) 
             ->columns([
                 Tables\Columns\TextColumn::make('nama_dokumen')
                     ->label('Nama Dokumen')->wrap()
