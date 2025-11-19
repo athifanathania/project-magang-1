@@ -17,7 +17,7 @@ $items = ML::query()
     ->where('documentable_id', $record->getKey())
     ->whereNull('parent_id')
     ->with('childrenRecursive')
-    ->orderBy('id')
+    ->orderByRaw('COALESCE(sort_order, id) ASC')
     ->get();
 
 // ===== baca state filter dari tabel (sama persis) =====
@@ -148,7 +148,7 @@ $resourceClass = method_exists($this, 'getResource') ? $this->getResource() : nu
         toDeleteVersion: { lampiranId: null, index: null, name: '' },
         pageId: '{{ $this->getId() }}'
     }"
-
+    data-page-id="{{ $this->getId() }}"
     x-on:set-imm-lampiran-to-delete.window="
         toDelete = $event.detail;
         $dispatch('open-modal', { id: 'confirm-delete-imm-lampiran-panel' });
@@ -245,3 +245,41 @@ $resourceClass = method_exists($this, 'getResource') ? $this->getResource() : nu
     </x-slot>
 </x-filament::modal>
 </div>
+
+@once
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<script>
+(function () {
+  function bindImmSortables(root) {
+    (root || document).querySelectorAll('.imm-sortable').forEach(function (listEl) {
+      if (listEl.__immBound) return;
+      listEl.__immBound = true;
+
+      new Sortable(listEl, {
+        handle: '.drag-handle',
+        draggable: '.imm-sortable-item',
+        animation: 150,
+        group: { name: 'imm-level', pull: false, put: false },
+        onEnd: function () {
+          const parentId = listEl.dataset.parent ? Number(listEl.dataset.parent) : null;
+          const orderedIds = Array.from(listEl.querySelectorAll(':scope > .imm-sortable-item'))
+            .map(el => Number(el.dataset.id));
+
+          // 🔽 ambil id komponen Livewire dari container panel
+          const pageId = listEl.closest('[data-page-id]')?.getAttribute('data-page-id');
+
+          if (pageId && orderedIds.length) {
+            window.Livewire.find(pageId).call('reorderImmChildren', parentId, orderedIds);
+          }
+        }
+      });
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => bindImmSortables());
+  document.addEventListener('livewire:initialized', () => bindImmSortables());
+  document.addEventListener('livewire:navigated', () => bindImmSortables());
+  window.addEventListener('open-modal', () => bindImmSortables());
+})();
+</script>
+@endonce

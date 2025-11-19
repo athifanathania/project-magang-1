@@ -250,9 +250,21 @@ $canDeleteStrict = auth()->user()?->hasRole('Admin') ?? false; // hanya Admin
       @endif
 
       @if ($hasChildren)
-        <div class="mt-2" x-show="open" x-cloak>
+        @php $canDrag = auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false; @endphp
+
+        <div class="mt-2 imm-sortable" x-show="open" x-cloak
+            data-parent="{{ $lampiran->id }}">
           @foreach ($children as $child)
-            @include('tables.rows.partials.imm-lampiran-card-node', ['lampiran'=>$child, 'level'=>$level+1])
+            <div class="imm-sortable-item" data-id="{{ $child->id }}">
+              @if($canDrag)
+                <span class="cursor-grab drag-handle mr-2" title="Geser untuk mengurutkan">⋮⋮</span>
+              @endif
+
+              @include('tables.rows.partials.imm-lampiran-card-node', [
+                'lampiran' => $child,
+                'level'    => $level+1
+              ])
+            </div>
           @endforeach
         </div>
       @endif

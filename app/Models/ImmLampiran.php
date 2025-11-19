@@ -91,7 +91,8 @@ class ImmLampiran extends Model
 
     public function children(): HasMany
     {
-        return $this->hasMany(self::class, 'parent_id')->orderBy('id');
+        return $this->hasMany(self::class, 'parent_id')
+            ->orderByRaw('COALESCE(sort_order, id) ASC');
     }
 
     public function childrenRecursive(): HasMany
@@ -101,6 +102,14 @@ class ImmLampiran extends Model
 
     protected static function booted(): void
     {
+        // default sort_order di ekor saudara saat create
+        static::creating(function (self $m) {
+            if (is_null($m->sort_order)) {
+                $max = self::where('parent_id', $m->parent_id)->max('sort_order');
+                $m->sort_order = is_null($max) ? 1 : ($max + 1);
+            }
+        });
+
         // updating: simpan path & waktu 'terbit' versi lama
         static::updating(function (self $m) {
             if ($m->isDirty('file')) {
@@ -111,7 +120,7 @@ class ImmLampiran extends Model
             }
         });
 
-        // saved: pindahkan file lama ke folder _versions + catat uploaded_at (waktu terbit lama)
+        // saved: pindahkan file lama ke folder _versions + catat uploaded_at
         static::saved(function (self $m) {
             if ($m->wasChanged('file') && $m->oldFilePath) {
                 $m->appendFileVersion($m->oldFilePath, auth()->id(), $m->oldUploadedAt);
@@ -179,6 +188,14 @@ class ImmLampiran extends Model
         foreach ($meta as $k => $v) { $out[$k] = $v; }
 
         $this->file_versions = $out;
+
+        // set sort_order default di ekor list saudara
+        static::creating(function (self $m) {
+            if (is_null($m->sort_order)) {
+                $max = self::where('parent_id', $m->parent_id)->max('sort_order');
+                $m->sort_order = is_null($max) ? 1 : ($max + 1);
+            }
+        });
     }
 
 
