@@ -250,7 +250,7 @@ $canDeleteStrict = auth()->user()?->hasRole('Admin') ?? false; // hanya Admin
       @endif
 
       @if ($hasChildren)
-        @php $canDrag = auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false; @endphp
+        @php $canDrag = auth()->user()?->hasAnyRole(['Admin']) ?? false; @endphp
 
         <div class="mt-2 imm-sortable" x-show="open" x-cloak
             data-parent="{{ $lampiran->id }}">
