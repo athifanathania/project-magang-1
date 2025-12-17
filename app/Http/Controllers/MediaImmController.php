@@ -50,6 +50,14 @@ class MediaImmController extends Controller
             $response->setLastModified(\Illuminate\Support\Carbon::createFromTimestamp(filemtime($full)));
         }
 
+        LogDownload::make([
+            'page'      => 'IMM ' . $type,
+            'type'      => 'view',
+            'file'      => basename($path),
+            'record_id' => $m->id,
+            'path'      => $path,
+        ]);
+
         return $response;
     }
 
@@ -74,6 +82,16 @@ class MediaImmController extends Controller
         abort_if(blank($path), 404, 'Path versi kosong.');
 
         $downloadName = (string) ($v['filename'] ?? basename($path));
+
+        LogDownload::make([
+            'page'      => 'IMM ' . $type,
+            'type'      => 'version',
+            'file'      => $downloadName,
+            'version'   => 'REV' . str_pad($index + 1, 2, '0', STR_PAD_LEFT),
+            'record_id' => $m->id,
+            'path'      => $path,
+        ]);
+
         return Storage::disk('private')->download($path, $downloadName);
     }
 }

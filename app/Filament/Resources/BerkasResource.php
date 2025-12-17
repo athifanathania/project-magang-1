@@ -288,17 +288,58 @@ class BerkasResource extends Resource
 
                 \Filament\Tables\Filters\SelectFilter::make('model')
                     ->label('Model')
-                    ->options(fn () => \App\Models\Berkas::query()
-                        ->whereNotNull('model')->distinct()->orderBy('model')
-                        ->pluck('model','model')->all())
+                    ->options(function ($livewire) {
+
+                        $cust = data_get(
+                            $livewire->tableFilters,
+                            'cust_name.value'
+                        );
+
+                        $q = \App\Models\Berkas::query()
+                            ->whereNotNull('model');
+
+                        if (filled($cust)) {
+                            $q->where('cust_name', $cust);
+                        }
+
+                        return $q->distinct()
+                            ->orderBy('model')
+                            ->pluck('model', 'model')
+                            ->all();
+                    })
                     ->preload()
                     ->searchable(),
 
                 \Filament\Tables\Filters\SelectFilter::make('kode_berkas')
                     ->label('Part No')
-                    ->options(fn () => \App\Models\Berkas::query()
-                        ->whereNotNull('kode_berkas')->distinct()->orderBy('kode_berkas')
-                        ->pluck('kode_berkas','kode_berkas')->all())
+                    ->options(function ($livewire) {
+
+                        $cust = data_get(
+                            $livewire->tableFilters,
+                            'cust_name.value'
+                        );
+
+                        $model = data_get(
+                            $livewire->tableFilters,
+                            'model.value'
+                        );
+
+                        $q = \App\Models\Berkas::query()
+                            ->whereNotNull('kode_berkas');
+
+                        if (filled($cust)) {
+                            $q->where('cust_name', $cust);
+                        }
+
+                        if (filled($model)) {
+                            $q->where('model', $model);
+                        }
+
+                        return $q->distinct()
+                            ->orderBy('kode_berkas')
+                            ->pluck('kode_berkas', 'kode_berkas')
+                            ->all();
+                    })
                     ->preload()
                     ->searchable(),
 

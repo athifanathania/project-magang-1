@@ -88,43 +88,65 @@ class RegularResource extends Resource
                 \Filament\Tables\Filters\SelectFilter::make('cust_name')
                     ->label('Cust Name')
                     ->options(fn () =>
-                        \App\Models\Regular::query()
+                        Regular::query()
                             ->whereNotNull('cust_name')
                             ->distinct()
                             ->orderBy('cust_name')
                             ->pluck('cust_name', 'cust_name')
                             ->all()
                     )
-                    ->preload()
-                    ->searchable(),
+                    ->searchable()
+                    ->preload(),
 
                 // Select: Model
                 \Filament\Tables\Filters\SelectFilter::make('model')
                     ->label('Model')
                     ->options(fn () =>
-                        \App\Models\Regular::query()
+                        Regular::query()
                             ->whereNotNull('model')
                             ->distinct()
                             ->orderBy('model')
                             ->pluck('model', 'model')
                             ->all()
                     )
-                    ->preload()
-                    ->searchable(),
+                    ->searchable()
+                    ->query(function (Builder $query, array $data) {
+                        $cust = data_get($query->getModel()->getTable() === 'regular'
+                            ? request()->get('tableFilters.cust_name.value')
+                            : null
+                        );
+
+                        if (filled($cust)) {
+                            $query->where('cust_name', $cust);
+                        }
+                    }),
 
                 // Select: Part No (kode_berkas)
                 \Filament\Tables\Filters\SelectFilter::make('kode_berkas')
                     ->label('Part No')
                     ->options(fn () =>
-                        \App\Models\Regular::query()
+                        Regular::query()
                             ->whereNotNull('kode_berkas')
                             ->distinct()
                             ->orderBy('kode_berkas')
                             ->pluck('kode_berkas', 'kode_berkas')
                             ->all()
                     )
-                    ->preload()
-                    ->searchable(),
+                    ->searchable()
+                    ->query(function (Builder $query) {
+                        $filters = request()->get('tableFilters', []);
+
+                        $cust  = data_get($filters, 'cust_name.value');
+                        $model = data_get($filters, 'model.value');
+
+                        if (filled($cust)) {
+                            $query->where('cust_name', $cust);
+                        }
+
+                        if (filled($model)) {
+                            $query->where('model', $model);
+                        }
+                    }),
 
                 \Filament\Tables\Filters\Filter::make('q')
                     ->label('Cari')

@@ -23,6 +23,13 @@ class MediaController extends Controller
     public function berkas(Berkas $berkas)
     {
         $this->authorize('view', $berkas);   // pastikan BerkasPolicy@view ada
+        LogDownload::make([
+            'page'      => 'berkas',
+            'type'      => 'view',
+            'file'      => basename($berkas->dokumen),
+            'record_id' => $berkas->id,
+            'path'      => $berkas->dokumen,
+        ]);
         return $this->streamFromDisks((string) $berkas->dokumen);
     }
 
@@ -31,6 +38,14 @@ class MediaController extends Controller
     {
         abort_if($lampiran->berkas_id !== $berkas->id, 404);
         $this->authorize('view', $berkas);
+        LogDownload::make([
+            'page'      => 'berkas-lampiran',
+            'type'      => 'view',
+            'file'      => basename($lampiran->file),
+            'record_id' => $lampiran->id,
+            'parent_id' => $regular->id,
+            'path'      => $lampiran->file,
+        ]);
         return $this->streamFromDisks((string) $lampiran->file);
     }
 
@@ -44,6 +59,15 @@ class MediaController extends Controller
 
         $v = $versions[$index];
         abort_unless(Storage::disk('private')->exists($v['path'] ?? ''), 404);
+
+        LogDownload::make([
+            'page'      => 'berkas',
+            'type'      => 'version',
+            'file'      => $v['filename'] ?? basename($v['path']),
+            'version'   => 'REV' . str_pad($index + 1, 2, '0', STR_PAD_LEFT),
+            'record_id' => $berkas->id,
+            'path'      => $v['path'],
+        ]);
 
         return Storage::disk('private')->download(
             $v['path'],
@@ -64,6 +88,16 @@ class MediaController extends Controller
 
         abort_unless($fp && Storage::disk('private')->exists($fp), 404);
 
+        LogDownload::make([
+            'page'      => 'lampiran',
+            'type'      => 'version',
+            'file'      => $v['filename'] ?? basename($fp),
+            'version'   => 'REV' . str_pad($index + 1, 2, '0', STR_PAD_LEFT),
+            'record_id' => $lampiran->id,
+            'parent_id' => $regular->id,
+            'path'      => $fp,
+        ]);
+
         return Storage::disk('private')->download(
             $fp,
             $v['filename'] ?? basename($fp)
@@ -77,7 +111,16 @@ class MediaController extends Controller
         $this->authorize('view', $regular); // sesuaikan policy/guard kamu
 
         $path = (string) $lampiran->file;
-        return $this->streamFromDisks($path); // gunakan util yg sama seperti lampiran Berkas
+        LogDownload::make([
+            'page'      => 'regular-lampiran',
+            'type'      => 'view',
+            'file'      => basename($lampiran->file),
+            'record_id' => $lampiran->id,
+            'parent_id' => $regular->id,
+            'path'      => $lampiran->file,
+        ]);
+
+        return $this->streamFromDisks($path);
     }
 
 }

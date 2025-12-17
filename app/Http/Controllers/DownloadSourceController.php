@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use App\Support\LogDownload;
 
 class DownloadSourceController extends Controller
 {
@@ -49,6 +50,14 @@ class DownloadSourceController extends Controller
         if (!empty($record->nama_dokumen)) {
             $filename = $record->nama_dokumen . '.' . pathinfo($filename, PATHINFO_EXTENSION);
         }
+
+        LogDownload::make([
+            'page' => strtoupper(str_replace('-', ' ', $type)),
+            'type'      => 'source',
+            'file'      => $filename,
+            'record_id' => $record->getKey(),
+            'path'      => $path,
+        ]);
 
         // Unduh sebagai attachment
         return response()->download(
@@ -97,6 +106,15 @@ class DownloadSourceController extends Controller
         $disk = \Storage::disk('private');
         abort_unless($disk->exists($path), 404, 'File tidak ditemukan.');
         $filename = (string)($ver['filename'] ?? basename($path));
+
+        LogDownload::make([
+            'page' => strtoupper(str_replace('-', ' ', $type)),
+            'type'      => 'version',
+            'file'      => $filename,
+            'version'   => 'REV' . str_pad($index + 1, 2, '0', STR_PAD_LEFT),
+            'record_id' => $rec->getKey(),
+            'path'      => $path,
+        ]);
 
         return response()->download(
             $disk->path($path),

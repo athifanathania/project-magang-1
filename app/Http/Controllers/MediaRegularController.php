@@ -21,6 +21,13 @@ class MediaRegularController extends Controller
     public function regular(Regular $regular)
     {
         $this->authorize('view', $regular); // <- butuh RegularPolicy
+        LogDownload::make([
+            'page'      => 'regular',
+            'type'      => 'view',  
+            'file'      => basename($regular->dokumen),
+            'record_id' => $regular->id,
+            'path'      => $regular->dokumen,
+        ]);
         return $this->streamFromDisks((string) $regular->dokumen);
     }
 
@@ -35,6 +42,15 @@ class MediaRegularController extends Controller
         $v  = $versions[$index];
         $fp = $v['path'] ?? $v['file_path'] ?? null;
         abort_unless($fp && Storage::disk('private')->exists($fp), 404);
+
+        LogDownload::make([
+            'page'      => 'regular',
+            'type'      => 'version',
+            'file'      => $v['filename'] ?? basename($fp),
+            'version'   => 'REV' . str_pad($index + 1, 2, '0', STR_PAD_LEFT),
+            'record_id' => $regular->id,
+            'path'      => $fp,
+        ]);
 
         return Storage::disk('private')->download(
             $fp,
