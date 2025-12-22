@@ -10,6 +10,12 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Filament\Tables\Filters\Filter;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Get;
+use Filament\Forms\Components\Grid;
+use Filament\Forms\Components\TagsInput;
+use Filament\Forms\Components\Toggle;
 
 class RegularResource extends Resource
 {
@@ -82,70 +88,88 @@ class RegularResource extends Resource
 
         return $t
         // ->persistFiltersInSession()
-        ->filtersLayout(\Filament\Tables\Enums\FiltersLayout::AboveContentCollapsible)
+        // ->filtersLayout(\Filament\Tables\Enums\FiltersLayout::AboveContentCollapsible)
+            ->filtersLayout(\Filament\Tables\Enums\FiltersLayout::Dropdown)
             ->filters([
-                // Select: Cust Name
-                \Filament\Tables\Filters\SelectFilter::make('cust_name')
-                    ->label('Cust Name')
-                    ->options(fn () =>
-                        Regular::query()
-                            ->whereNotNull('cust_name')
-                            ->distinct()
-                            ->orderBy('cust_name')
-                            ->pluck('cust_name', 'cust_name')
-                            ->all()
-                    )
-                    ->searchable()
-                    ->preload(),
+                Filter::make('hierarchy')
+                    ->label('Filter Dokumen')
+                    ->form([
+                        Select::make('cust_name')
+                            ->label('Cust Name')
+                            ->options(fn () =>
+                                Regular::query()
+                                    ->whereNotNull('cust_name')
+                                    ->distinct()
+                                    ->orderBy('cust_name')
+                                    ->pluck('cust_name', 'cust_name')
+                            )
+                            ->reactive()
+                            ->afterStateUpdated(fn (callable $set) => [
+                                $set('model', null),
+                                $set('kode_berkas', null),
+                            ]),
 
-                // Select: Model
-                \Filament\Tables\Filters\SelectFilter::make('model')
-                    ->label('Model')
-                    ->options(fn () =>
-                        Regular::query()
-                            ->whereNotNull('model')
-                            ->distinct()
-                            ->orderBy('model')
-                            ->pluck('model', 'model')
-                            ->all()
-                    )
-                    ->searchable()
+                        Select::make('model')
+                            ->label('Model')
+                            ->options(fn (Get $get) =>
+                                Regular::query()
+                                    ->when(
+                                        $get('cust_name'),
+                                        fn ($q) => $q->where('cust_name', $get('cust_name'))
+                                    )
+                                    ->whereNotNull('model')
+                                    ->distinct()
+                                    ->orderBy('model')
+                                    ->pluck('model', 'model')
+                            )
+                            ->reactive()
+                            ->afterStateUpdated(fn (callable $set) =>
+                                $set('kode_berkas', null)
+                            ),
+
+                        Select::make('kode_berkas')
+                            ->label('Part No')
+                            ->options(fn (Get $get) =>
+                                Regular::query()
+                                    ->when(
+                                        $get('cust_name'),
+                                        fn ($q) => $q->where('cust_name', $get('cust_name'))
+                                    )
+                                    ->when(
+                                        $get('model'),
+                                        fn ($q) => $q->where('model', $get('model'))
+                                    )
+                                    ->whereNotNull('kode_berkas')
+                                    ->distinct()
+                                    ->orderBy('kode_berkas')
+                                    ->pluck('kode_berkas', 'kode_berkas')
+                            ),
+                    ])
+
+                    // 🔹 QUERY UTAMA (WAJIB di Filter, bukan di Select)
                     ->query(function (Builder $query, array $data) {
-                        $cust = data_get($query->getModel()->getTable() === 'regular'
-                            ? request()->get('tableFilters.cust_name.value')
-                            : null
-                        );
+                        return $query
+                            ->when(
+                                $data['cust_name'] ?? null,
+                                fn ($q, $v) => $q->where('cust_name', $v)
+                            )
+                            ->when(
+                                $data['model'] ?? null,
+                                fn ($q, $v) => $q->where('model', $v)
+                            )
+                            ->when(
+                                $data['kode_berkas'] ?? null,
+                                fn ($q, $v) => $q->where('kode_berkas', $v)
+                            );
+                    })
 
-                        if (filled($cust)) {
-                            $query->where('cust_name', $cust);
-                        }
-                    }),
-
-                // Select: Part No (kode_berkas)
-                \Filament\Tables\Filters\SelectFilter::make('kode_berkas')
-                    ->label('Part No')
-                    ->options(fn () =>
-                        Regular::query()
-                            ->whereNotNull('kode_berkas')
-                            ->distinct()
-                            ->orderBy('kode_berkas')
-                            ->pluck('kode_berkas', 'kode_berkas')
-                            ->all()
-                    )
-                    ->searchable()
-                    ->query(function (Builder $query) {
-                        $filters = request()->get('tableFilters', []);
-
-                        $cust  = data_get($filters, 'cust_name.value');
-                        $model = data_get($filters, 'model.value');
-
-                        if (filled($cust)) {
-                            $query->where('cust_name', $cust);
-                        }
-
-                        if (filled($model)) {
-                            $query->where('model', $model);
-                        }
+                    // 🔹 Label active filter (kayak BOM)
+                    ->indicateUsing(function (array $data): array {
+                        return collect([
+                            $data['cust_name']   ? "Cust: {$data['cust_name']}" : null,
+                            $data['model']       ? "Model: {$data['model']}" : null,
+                            $data['kode_berkas'] ? "Part: {$data['kode_berkas']}" : null,
+                        ])->filter()->values()->all();
                     }),
 
                 \Filament\Tables\Filters\Filter::make('q')
@@ -165,7 +189,7 @@ class RegularResource extends Resource
                                 \Filament\Forms\Components\Toggle::make('all')
                                     ->label('All keywords')
                                     ->inline(true)        // toggle + label satu baris, di kanan
-                                    ->columnSpan(3),
+                                    ->columnSpan(5),
                             ]),
                     ])
                     ->query(function (\Illuminate\Database\Eloquent\Builder $query, array $data) use ($tbl): void {
@@ -224,57 +248,57 @@ class RegularResource extends Resource
                             ->filter(fn ($t) => is_string($t) && trim($t) !== '');
                         return $tags->isNotEmpty() ? 'Cari: '.$tags->implode(', ') : null;
                     }),
-                ]) 
-        ->actions([
-            \Filament\Tables\Actions\Action::make('lampiran')
-                ->label('')
-                ->icon('heroicon-m-paper-clip')
-                ->color('gray')
-                ->size('xs')
-                ->modalHeading('Dokumen Pelengkap')
-                ->modalSubmitAction(false)
-                ->modalWidth('7xl')
-                ->modalCancelActionLabel('Tutup')
-                ->modalContent(function (? \Illuminate\Database\Eloquent\Model $record) {
-                    if (! $record) return view('tables.rows.lampirans', ['record' => null, 'lampirans' => collect()]);
-                    $roots = $record->rootLampirans()->with('childrenRecursive')->orderBy('id')->get();
-                    return view('tables.rows.lampirans', ['record' => $record, 'lampirans' => $roots]);
-                })
-                ->tooltip('Dokumen Pelengkap'),
+            ]) 
+            ->actions([
+                \Filament\Tables\Actions\Action::make('lampiran')
+                    ->label('')
+                    ->icon('heroicon-m-paper-clip')
+                    ->color('gray')
+                    ->size('xs')
+                    ->modalHeading('Dokumen Pelengkap')
+                    ->modalSubmitAction(false)
+                    ->modalWidth('7xl')
+                    ->modalCancelActionLabel('Tutup')
+                    ->modalContent(function (? \Illuminate\Database\Eloquent\Model $record) {
+                        if (! $record) return view('tables.rows.lampirans', ['record' => null, 'lampirans' => collect()]);
+                        $roots = $record->rootLampirans()->with('childrenRecursive')->orderBy('id')->get();
+                        return view('tables.rows.lampirans', ['record' => $record, 'lampirans' => $roots]);
+                    })
+                    ->tooltip('Dokumen Pelengkap'),
 
-            \Filament\Tables\Actions\ViewAction::make()
-                ->label('')
-                ->icon('heroicon-m-eye')
-                ->modalWidth('7xl')
-                ->tooltip('Lihat'),
+                \Filament\Tables\Actions\ViewAction::make()
+                    ->label('')
+                    ->icon('heroicon-m-eye')
+                    ->modalWidth('7xl')
+                    ->tooltip('Lihat'),
 
-            \Filament\Tables\Actions\EditAction::make()
-                ->label('')
-                ->icon('heroicon-m-pencil')
-                ->tooltip('Edit')
-                ->visible(fn () => auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false),
+                \Filament\Tables\Actions\EditAction::make()
+                    ->label('')
+                    ->icon('heroicon-m-pencil')
+                    ->tooltip('Edit')
+                    ->visible(fn () => auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false),
 
-            \Filament\Tables\Actions\DeleteAction::make()
-                ->label('')
-                ->icon('heroicon-m-trash')
-                ->tooltip('Hapus')
-                ->visible(fn () => auth()->user()?->hasRole('Admin') ?? false),
+                \Filament\Tables\Actions\DeleteAction::make()
+                    ->label('')
+                    ->icon('heroicon-m-trash')
+                    ->tooltip('Hapus')
+                    ->visible(fn () => auth()->user()?->hasRole('Admin') ?? false),
 
-            \Filament\Tables\Actions\Action::make('downloadSource')
-                ->label('')
-                ->icon('heroicon-o-arrow-down-tray')
-                ->url(fn ($record) => route('download.source', [
-                    'type' => 'regular',   // ← khusus Regular
-                    'id'   => $record->getKey(),
-                ]))
-                ->openUrlInNewTab()
-                ->visible(fn () => \Illuminate\Support\Facades\Gate::allows('download-source'))
-                ->disabled(fn ($record) => blank($record->dokumen_src))
-                ->tooltip(fn ($record) => blank($record->dokumen_src) ? 'File asli belum diunggah' : 'Download file asli')
-                ->extraAttributes(fn ($record) => [
-                    'title' => blank($record->dokumen_src) ? 'File asli belum diunggah' : 'Download file asli',
-                ]),
-        ]);
+                \Filament\Tables\Actions\Action::make('downloadSource')
+                    ->label('')
+                    ->icon('heroicon-o-arrow-down-tray')
+                    ->url(fn ($record) => route('download.source', [
+                        'type' => 'regular',   // ← khusus Regular
+                        'id'   => $record->getKey(),
+                    ]))
+                    ->openUrlInNewTab()
+                    ->visible(fn () => \Illuminate\Support\Facades\Gate::allows('download-source'))
+                    ->disabled(fn ($record) => blank($record->dokumen_src))
+                    ->tooltip(fn ($record) => blank($record->dokumen_src) ? 'File asli belum diunggah' : 'Download file asli')
+                    ->extraAttributes(fn ($record) => [
+                        'title' => blank($record->dokumen_src) ? 'File asli belum diunggah' : 'Download file asli',
+                    ]),
+            ]);
     }
 
     public static function getPages(): array

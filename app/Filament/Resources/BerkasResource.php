@@ -49,6 +49,7 @@ use Illuminate\Database\Eloquent\Model;
 use Filament\Tables\Enums\FiltersLayout;
 use Filament\Support\Enums\MaxWidth;
 use Filament\Forms\Components\Component;
+use Filament\Forms\Components\Select;
 
 class BerkasResource extends Resource
 {
@@ -211,7 +212,7 @@ class BerkasResource extends Resource
     {
         return static::applyRowClickPolicy($table)
             // ->persistFiltersInSession()
-            ->filtersLayout(\Filament\Tables\Enums\FiltersLayout::AboveContentCollapsible)
+            ->filtersLayout(\Filament\Tables\Enums\FiltersLayout::Dropdown)
             ->columns([
                 TextColumn::make('cust_name')
                     ->label('Cust Name')
@@ -359,7 +360,7 @@ class BerkasResource extends Resource
                                 ->label('All keywords')
                                 ->inline(true)
                                 ->live()
-                                ->columnSpan(3),
+                                ->columnSpan(5),
                         ]),
                     ])
                     ->query(function (Builder $query, array $data): void {

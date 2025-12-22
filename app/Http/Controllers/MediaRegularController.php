@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Regular;
 use Illuminate\Support\Facades\Storage;
+use App\Support\LogDownload;
 
 class MediaRegularController extends Controller
 {

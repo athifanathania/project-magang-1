@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Berkas;
 use App\Models\Lampiran;
 use Illuminate\Support\Facades\Storage;
+use App\Support\LogDownload;
 
 class MediaController extends Controller
 {
