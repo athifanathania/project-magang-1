@@ -102,7 +102,9 @@ class ImmInstruksiStandarResource extends Resource
         $childTbl = (new \App\Models\ImmLampiran)->getTable();   
 
         return static::applyRowClickPolicy($table)
-            // ->persistFiltersInSession()   
+            ->paginated([10, 25, 50])
+            ->defaultPaginationPageOption(10)
+            ->striped()   
             ->columns([
                 Tables\Columns\TextColumn::make('nama_dokumen')
                     ->label('Nama Dokumen')->wrap()

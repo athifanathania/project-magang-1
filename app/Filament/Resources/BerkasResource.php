@@ -211,7 +211,9 @@ class BerkasResource extends Resource
     public static function table(Table $table): Table
     {
         return static::applyRowClickPolicy($table)
-            // ->persistFiltersInSession()
+            ->paginated([10, 25, 50])
+            ->defaultPaginationPageOption(10)
+            ->striped()
             ->filtersLayout(\Filament\Tables\Enums\FiltersLayout::Dropdown)
             ->columns([
                 TextColumn::make('cust_name')

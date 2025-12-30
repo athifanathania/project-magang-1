@@ -87,8 +87,9 @@ class RegularResource extends Resource
         $tbl = (new \App\Models\Regular)->getTable();
 
         return $t
-        // ->persistFiltersInSession()
-        // ->filtersLayout(\Filament\Tables\Enums\FiltersLayout::AboveContentCollapsible)
+            ->paginated([10, 25, 50])
+            ->defaultPaginationPageOption(10)
+            ->striped()
             ->filtersLayout(\Filament\Tables\Enums\FiltersLayout::Dropdown)
             ->filters([
                 Filter::make('hierarchy')
