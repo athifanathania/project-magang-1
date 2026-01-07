@@ -52,11 +52,12 @@ class DownloadSourceController extends Controller
         }
 
         LogDownload::make([
-            'page' => strtoupper(str_replace('-', ' ', $type)),
-            'type'      => 'source',
-            'file'      => $filename,
+            'page'      => strtoupper(str_replace('-', ' ', $type)),
+            'type'      => $type, 
+            'file'      => $filename, 
             'record_id' => $record->getKey(),
             'path'      => $path,
+            'category'  => 'source_download', 
         ]);
 
         // Unduh sebagai attachment
@@ -108,8 +109,8 @@ class DownloadSourceController extends Controller
         $filename = (string)($ver['filename'] ?? basename($path));
 
         LogDownload::make([
-            'page' => strtoupper(str_replace('-', ' ', $type)),
-            'type'      => 'version',
+            'page'      => strtoupper(str_replace('-', ' ', $type)),
+            'type'      => $type,
             'file'      => $filename,
             'version'   => 'REV' . str_pad($index + 1, 2, '0', STR_PAD_LEFT),
             'record_id' => $rec->getKey(),

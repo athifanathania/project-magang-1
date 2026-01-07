@@ -10,6 +10,7 @@ class LogRegistered
     {
         activity()
             ->causedBy($event->user)
+            ->performedOn($event->user)
             ->event('register')
             ->withProperties([
                 'ip'         => request()->ip(),

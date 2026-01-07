@@ -10,6 +10,7 @@ class LogLogin
     {
         activity()
             ->causedBy($event->user)
+            ->performedOn($event->user)
             ->event('login')
             ->withProperties([
                 'ip'         => request()->ip(),

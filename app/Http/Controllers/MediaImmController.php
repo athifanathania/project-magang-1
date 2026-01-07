@@ -53,7 +53,7 @@ class MediaImmController extends Controller
 
         LogDownload::make([
             'page'      => 'IMM ' . $type,
-            'type'      => 'view',
+            'type'      => 'imm-' . $type,  
             'file'      => basename($path),
             'record_id' => $m->id,
             'path'      => $path,
@@ -86,7 +86,7 @@ class MediaImmController extends Controller
 
         LogDownload::make([
             'page'      => 'IMM ' . $type,
-            'type'      => 'version',
+            'type'      => 'imm-' . $type,
             'file'      => $downloadName,
             'version'   => 'REV' . str_pad($index + 1, 2, '0', STR_PAD_LEFT),
             'record_id' => $m->id,

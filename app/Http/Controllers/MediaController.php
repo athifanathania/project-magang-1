@@ -26,7 +26,7 @@ class MediaController extends Controller
         $this->authorize('view', $berkas);   // pastikan BerkasPolicy@view ada
         LogDownload::make([
             'page'      => 'berkas',
-            'type'      => 'view',
+            'type'      => 'berkas', 
             'file'      => basename($berkas->dokumen),
             'record_id' => $berkas->id,
             'path'      => $berkas->dokumen,
@@ -41,10 +41,9 @@ class MediaController extends Controller
         $this->authorize('view', $berkas);
         LogDownload::make([
             'page'      => 'berkas-lampiran',
-            'type'      => 'view',
+            'type'      => 'lampiran', 
             'file'      => basename($lampiran->file),
             'record_id' => $lampiran->id,
-            'parent_id' => $regular->id,
             'path'      => $lampiran->file,
         ]);
         return $this->streamFromDisks((string) $lampiran->file);
@@ -63,7 +62,7 @@ class MediaController extends Controller
 
         LogDownload::make([
             'page'      => 'berkas',
-            'type'      => 'version',
+            'type'      => 'berkas', 
             'file'      => $v['filename'] ?? basename($v['path']),
             'version'   => 'REV' . str_pad($index + 1, 2, '0', STR_PAD_LEFT),
             'record_id' => $berkas->id,
@@ -91,11 +90,10 @@ class MediaController extends Controller
 
         LogDownload::make([
             'page'      => 'lampiran',
-            'type'      => 'version',
+            'type'      => 'lampiran', 
             'file'      => $v['filename'] ?? basename($fp),
             'version'   => 'REV' . str_pad($index + 1, 2, '0', STR_PAD_LEFT),
             'record_id' => $lampiran->id,
-            'parent_id' => $regular->id,
             'path'      => $fp,
         ]);
 
@@ -114,10 +112,9 @@ class MediaController extends Controller
         $path = (string) $lampiran->file;
         LogDownload::make([
             'page'      => 'regular-lampiran',
-            'type'      => 'view',
+            'type'      => 'lampiran', 
             'file'      => basename($lampiran->file),
             'record_id' => $lampiran->id,
-            'parent_id' => $regular->id,
             'path'      => $lampiran->file,
         ]);
 

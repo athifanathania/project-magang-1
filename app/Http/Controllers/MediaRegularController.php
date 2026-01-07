@@ -24,7 +24,7 @@ class MediaRegularController extends Controller
         $this->authorize('view', $regular); // <- butuh RegularPolicy
         LogDownload::make([
             'page'      => 'regular',
-            'type'      => 'view',  
+            'type'      => 'regular', 
             'file'      => basename($regular->dokumen),
             'record_id' => $regular->id,
             'path'      => $regular->dokumen,
@@ -46,7 +46,7 @@ class MediaRegularController extends Controller
 
         LogDownload::make([
             'page'      => 'regular',
-            'type'      => 'version',
+            'type'      => 'regular', 
             'file'      => $v['filename'] ?? basename($fp),
             'version'   => 'REV' . str_pad($index + 1, 2, '0', STR_PAD_LEFT),
             'record_id' => $regular->id,

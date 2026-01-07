@@ -45,7 +45,7 @@ class ActivityLogResource extends Resource
                 Tables\Columns\BadgeColumn::make('event')->label('Aksi')
                     ->colors([
                         'primary' => ['view'],
-                        'success' => ['login','create','version_add','version_replace','version_reopen'],
+                        'success' => ['login','create','version_add','version_replace','version_reopen', 'download'],
                         'warning' => ['update','version_desc_update'],
                         'danger'  => ['delete','version_delete','logout'],
                     ])
@@ -108,6 +108,7 @@ class ActivityLogResource extends Resource
                     'login'               => 'login',
                     'logout'              => 'logout',
                     'view'                => 'view',
+                    'download'          => 'download',
                     'create'              => 'create',
                     'update'              => 'update',
                     'delete'              => 'delete',

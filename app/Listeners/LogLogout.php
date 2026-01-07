@@ -10,6 +10,7 @@ class LogLogout
     {
         activity()
             ->causedBy($event->user)
+            ->performedOn($event->user)
             ->event('logout')
             ->withProperties([
                 'ip'         => request()->ip(),
