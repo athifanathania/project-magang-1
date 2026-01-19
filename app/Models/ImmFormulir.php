@@ -13,6 +13,11 @@ class ImmFormulir extends Model
 {
     use HasImmVersions, LogsActivity, HumanReadableActivity;
 
+    public function getActivityDisplayName(): ?string
+    {
+        return $this->nama_dokumen ?? "Formulir #{$this->id}";
+    }
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()

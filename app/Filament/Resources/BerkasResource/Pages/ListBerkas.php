@@ -23,6 +23,18 @@ class ListBerkas extends ListRecords
     {
         parent::mount();
 
+        activity()
+            ->causedBy(auth()->user())
+            ->event('view')
+            ->withProperties([
+                // Kunci ini HARUS sama dengan yang di ActivityLogResource ('object_label')
+                'object_label' => 'Dokumen Eksternal # Halaman Event', 
+                'url' => request()->fullUrl(),       // URL Halaman
+                'ip' => request()->ip(),             // Alamat IP User
+                'user_agent' => request()->userAgent()
+            ])
+            ->log('Melihat Halaman Daftar Event');
+
         if (request()->boolean('openLampiran') && ($id = (int) request('berkas_id'))) {
             $this->openLampiranForId = $id;
         }

@@ -57,4 +57,21 @@ class ListImmInstruksiStandars extends ListRecords
         // biar Livewire TIDAK re-render komponen (DOM tetap seperti hasil drag)
         $this->skipRender();
     }
+
+    public function mount(): void
+    {
+        parent::mount();
+
+        activity()
+            ->causedBy(auth()->user())
+            ->event('view')
+            ->withProperties([
+                'object_label' => 'Dokumen Regular # Halaman Instruksi Kerja & Standar', 
+                'url' => request()->fullUrl(),       // URL Halaman
+                'ip' => request()->ip(),             // Alamat IP User
+                'user_agent' => request()->userAgent()
+            ])
+            ->log('Melihat Halaman Daftar Instruksi Kerja & Standar');
+            
+    }
 }

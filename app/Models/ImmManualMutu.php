@@ -13,6 +13,12 @@ class ImmManualMutu extends Model
 {
     use HasImmVersions, LogsActivity, HumanReadableActivity;
 
+    public function getActivityDisplayName(): ?string
+    {
+        // Pastikan ini sesuai kolom di database, misalnya 'nama_dokumen'
+        return $this->nama_dokumen ?? "Manual Mutu #{$this->id}";
+    }
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()

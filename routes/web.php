@@ -8,6 +8,22 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\File;
 use App\Http\Controllers\MediaRegularController;
 
+/* ==============================================
+   1. ROUTE HALAMAN DEPAN & PUBLIK (TANPA LOGIN)
+============================================== */
+
+// A. Halaman Welcome (Landing Page yang baru dibuat)
+Route::get('/', function () {
+    if (auth()->check()) {
+        return redirect('/admin');
+    }
+    return view('welcome');
+})->name('welcome');
+
+// B. Halaman Publik (Pencarian Dokumen untuk Tamu)
+Route::get('/portal-publik', [App\Http\Controllers\PublicDocumentController::class, 'index'])
+    ->name('public.dashboard');
+    
 /* ====== MEDIA: WAJIB LOGIN ====== */
 Route::middleware('auth')->group(function () {
     // Berkas aktif & lampirannya

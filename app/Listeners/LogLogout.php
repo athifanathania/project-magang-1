@@ -15,6 +15,10 @@ class LogLogout
             ->withProperties([
                 'ip'         => request()->ip(),
                 'user_agent' => substr((string) request()->userAgent(), 0, 500),
+                'user_data'  => [
+                    'name'       => $event->user->name,
+                    'department' => $event->user->department,
+                ]
             ])
             ->log('User logged out');
     }

@@ -14,6 +14,11 @@ class Lampiran extends Model
 {
     use HasFactory, LogsActivity, HumanReadableActivity;
 
+    public function getActivityDisplayName(): ?string
+    {
+        return $this->nama ?? "Lampiran #{$this->id}";
+    }
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()

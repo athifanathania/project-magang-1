@@ -13,6 +13,17 @@ class Berkas extends Model
 {
     use HasFactory, HasBerkasVersions, LogsActivity, HumanReadableActivity;
 
+    public function getActivityDisplayName(): ?string
+    {
+        $label = $this->nama ?? 'Berkas Tanpa Nama';
+        
+        if (!empty($this->kode_berkas)) {
+            return "{$this->kode_berkas} - {$label}";
+        }
+
+        return $label;
+    }
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()

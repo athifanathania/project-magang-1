@@ -21,9 +21,8 @@ class PublicPanelProvider extends PanelProvider
     public function panel(Panel $panel): Panel
     {
         return $panel
-            // JANGAN ->default() agar tidak bentrok dengan Admin panel
             ->id('public')
-            ->path('') // root
+            ->path('portal')
             ->brandName(config('app.name'))
             ->colors(['primary' => Color::Blue])
 

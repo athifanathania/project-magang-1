@@ -15,7 +15,7 @@ trait HumanReadableActivity
         return $name ? "{$base}: {$name}" : "{$base}#{$this->getKey()}";
     }
 
-    protected function getActivityDisplayName(): ?string
+    public function getActivityDisplayName(): ?string
     {
         foreach (['nama', 'nama_dokumen', 'kode_berkas', 'title'] as $col) {
             if (!empty($this->{$col})) return (string) $this->{$col};

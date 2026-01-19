@@ -42,6 +42,11 @@ class Regular extends Model
         return $this->rootLampirans()->with('childrenRecursive');
     }
 
+    public function getActivityDisplayName(): ?string
+    {
+        return $this->nama ?? "Regular #{$this->id}";
+    }
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()

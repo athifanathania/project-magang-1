@@ -57,4 +57,20 @@ class ListImmProsedurs extends ListRecords
         // biar Livewire TIDAK re-render komponen (DOM tetap seperti hasil drag)
         $this->skipRender();
     }
+
+    public function mount(): void
+    {
+        parent::mount();
+
+        activity()
+            ->causedBy(auth()->user())
+            ->event('view')
+            ->withProperties([
+                'object_label' => 'Dokumen Internal # Halaman Prosedur', 
+                'url' => request()->fullUrl(),       // URL Halaman
+                'ip' => request()->ip(),             // Alamat IP User
+                'user_agent' => request()->userAgent()
+            ])
+            ->log('Melihat Halaman Daftar Prosedur');
+    }
 }

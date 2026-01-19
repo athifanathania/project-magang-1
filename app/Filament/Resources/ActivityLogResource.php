@@ -20,13 +20,11 @@ class ActivityLogResource extends Resource
     protected static ?string $navigationLabel = 'Log History User';
     protected static ?int $navigationSort = 99;
 
-    /** NAV: hanya tampil untuk Admin */
     public static function shouldRegisterNavigation(): bool
     {
         return auth()->user()?->hasRole('Admin') ?? false;
     }
 
-    /** Permission list records (Filament v3) */
     public static function canViewAny(): bool
     {
         return auth()->user()?->hasRole('Admin') ?? false;
@@ -39,42 +37,100 @@ class ActivityLogResource extends Resource
             ->defaultPaginationPageOption(10)
             ->striped()
             ->columns([
+                // 1. WAKTU
                 Tables\Columns\TextColumn::make('created_at')
-                    ->label('Waktu')->dateTime('d/m/Y H:i')->sortable()->searchable(),
-                Tables\Columns\TextColumn::make('causer.name')->label('User')->toggleable()->searchable(),
-                Tables\Columns\BadgeColumn::make('event')->label('Aksi')
+                    ->label('Waktu')
+                    ->dateTime('d/m/Y H:i')
+                    ->sortable()
+                    ->searchable()
+                    ->verticalAlignment('start'),
+
+                // 2. USER
+                Tables\Columns\TextColumn::make('causer.name')
+                    ->label('User')
+                    ->toggleable()
+                    ->searchable()
+                    ->wrap()
+                    ->lineClamp(2) // Batasi 2 baris
+                    ->verticalAlignment('start'),
+
+                // 3. AKSI
+                Tables\Columns\BadgeColumn::make('event')
+                    ->label('Aksi')
                     ->colors([
                         'primary' => ['view'],
                         'success' => ['login','create','version_add','version_replace','version_reopen', 'download'],
                         'warning' => ['update','version_desc_update'],
                         'danger'  => ['delete','version_delete','logout'],
                     ])
-                    ->sortable(),
-                Tables\Columns\TextColumn::make('description')->label('Deskripsi')->wrap()->limit(80)->searchable(),
+                    ->sortable()
+                    ->verticalAlignment('start'),
+
+                // 4. DESKRIPSI (Updated agar rapi ada '...')
+                Tables\Columns\TextColumn::make('description')
+                    ->label('Deskripsi')
+                    ->wrap()
+                    ->lineClamp(2) // Batasi 2 baris, sisanya '...'
+                    ->tooltip(fn ($state) => $state) // Hover untuk lihat full text
+                    ->searchable()
+                    ->verticalAlignment('start')
+                    ->extraCellAttributes(['style' => 'min-width: 250px;']), // Opsional: lebar minimum
+
                 Tables\Columns\TextColumn::make('subject_type')
                     ->label('Objek')
-                    ->formatStateUsing(function ($state, \Spatie\Activitylog\Models\Activity $record) {
-                        $label = null;
-                        try {
-                            $label = $record->getExtraProperty('object_label'); 
-                        } catch (\Throwable $e) {
+                    ->getStateUsing(function (\Spatie\Activitylog\Models\Activity $record) {
+                        
+                        // --- 1. PRIORITAS UTAMA: Cek titipan label custom ---
+                        // (Ini yang memperbaiki masalah Anda)
+                        $label = $record->getExtraProperty('object_label');
+                        if (filled($label)) {
+                            return $label;
                         }
 
-                        if (filled($label)) return $label;
+                        // --- 2. Logic Khusus User ---
+                        if ($record->subject_type === \App\Models\User::class && $record->subject) {
+                            return $record->subject->name . ' #' . ($record->subject->department ?? '-');
+                        }
 
-                        if (!$record->subject_type || !$record->subject_id) return '-';
+                        // --- 3. Logic Berkas/Regular (via function getActivityDisplayName) ---
+                        if ($record->subject && method_exists($record->subject, 'getActivityDisplayName')) {
+                            return $record->subject->getActivityDisplayName();
+                        }
+
+                        // --- 4. Fallback Terakhir ---
+                        if (! $record->subject_type || ! $record->subject_id) return '-';
                         return class_basename($record->subject_type) . '#' . $record->subject_id;
                     })
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('properties.ip')->label('IP')->toggleable(isToggledHiddenByDefault:true),
-                Tables\Columns\TextColumn::make('properties.route')->label('Route')->toggleable(isToggledHiddenByDefault:true)->wrap(),
+                    ->wrap()
+                    ->lineClamp(2)
+                    ->tooltip(fn ($state) => $state)
+                    // Searchable tetap bisa dipasang, tapi dia hanya cari berdasarkan subject_type asli database
+                    ->searchable() 
+                    ->verticalAlignment('start')
+                    ->color(fn ($record) => $record->subject_type === \App\Models\User::class ? 'info' : null),
+
+                // 6. IP
+                Tables\Columns\TextColumn::make('properties.ip')
+                    ->label('IP')
+                    ->toggleable(isToggledHiddenByDefault:true)
+                    ->verticalAlignment('start'),
+
+                // 7. ROUTE (Updated agar tidak merusak layout)
+                Tables\Columns\TextColumn::make('properties.route')
+                    ->label('Route')
+                    ->wrap()
+                    ->lineClamp(1) // URL panjang cukup 1 baris + ...
+                    ->tooltip(fn ($state) => $state)
+                    ->toggleable(isToggledHiddenByDefault:true)
+                    ->verticalAlignment('start'),
+
                 Tables\Columns\TextColumn::make('properties->object_label')
                     ->label('Objek (search)')
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->searchable(),
             ])
             ->filters([
-                // 1) Periode cepat
+                // --- 1. Filter Periode Cepat ---
                 Tables\Filters\SelectFilter::make('period')
                     ->label('Periode Cepat')
                     ->options([
@@ -86,7 +142,6 @@ class ActivityLogResource extends Resource
                     ->query(function (Builder $query, array $data) {
                         $v = $data['value'] ?? null;
                         if (!$v) return $query;
-
                         return match ($v) {
                             'today'      => $query->whereDate('created_at', Carbon::today()),
                             'yesterday'  => $query->whereDate('created_at', Carbon::yesterday()),
@@ -95,59 +150,70 @@ class ActivityLogResource extends Resource
                                                 ->whereYear('created_at', Carbon::now()->year),
                             default      => $query,
                         };
-                    })
-                    ->indicateUsing(fn (array $data) => [
-                        'today'      => 'Hari ini',
-                        'yesterday'  => 'Kemarin',
-                        'last7'      => '7 hari terakhir',
-                        'this_month' => 'Bulan ini',
-                    ][$data['value'] ?? ''] ?? null),
+                    }),
 
-                // 2) Event (default by column)
-                Tables\Filters\SelectFilter::make('event')->options([
-                    'login'               => 'login',
-                    'logout'              => 'logout',
-                    'view'                => 'view',
-                    'download'          => 'download',
-                    'create'              => 'create',
-                    'update'              => 'update',
-                    'delete'              => 'delete',
-                    'version_add'         => 'version_add',
-                    'version_replace'     => 'version_replace',
-                    'version_reopen'      => 'version_reopen',
-                    'version_delete'      => 'version_delete',
-                    'version_desc_update' => 'version_desc_update',
-                ]),
+                // --- 2. Filter Khusus Halaman (BARU) ---
+                // Tables\Filters\SelectFilter::make('halaman_view')
+                //     ->label('Halaman (Page)')
+                //     ->options(fn () => Activity::query()
+                //         ->where('event', 'view') // Hanya ambil event 'view'
+                //         ->distinct()
+                //         ->pluck('description', 'description') // Ambil kolom description
+                //         ->sort()
+                //         ->all()
+                //     )
+                //     ->searchable() // Biar gampang cari kalau halamannya banyak
+                //     ->query(function (Builder $query, array $data) {
+                //         if (empty($data['value'])) return $query;
+                //         return $query->where('description', $data['value']);
+                //     }),
 
-                // 3) User (stabil – pakai Filter + Select form)
+                // --- 3. Filter Event/Aksi ---
+                Tables\Filters\SelectFilter::make('event')
+                    ->label('Jenis Aksi')
+                    ->options([
+                        'login'            => 'Login',
+                        'logout'           => 'Logout',
+                        'view'             => 'Melihat Halaman (View)', // Label diperjelas
+                        'download'         => 'Download',
+                        'create'           => 'Create (Tambah)',
+                        'update'           => 'Update (Edit)',
+                        'delete'           => 'Delete (Hapus)',
+                        'version_add'      => 'Version Add',
+                        'version_replace'  => 'Version Replace',
+                        'version_reopen'   => 'Version Reopen',
+                        'version_delete'   => 'Version Delete',
+                        'version_desc_update' => 'Version Desc Update',
+                    ]),
+
+                // --- 4. Filter User ---
                 Tables\Filters\Filter::make('by_user')
                     ->label('User')
                     ->form([
                         Forms\Components\Select::make('id')
-                            ->label('User')
+                            ->label('Pilih User')
                             ->options(fn () => \App\Models\User::query()
                                 ->orderBy('name')->pluck('name', 'id')->all()
                             )
-                            ->preload() // load semua opsi
-                            // ->searchable()  // HAPUS baris ini
+                            ->searchable() // Tambahkan searchable agar user mudah dicari
+                            ->preload()
                     ])
                     ->query(function (Builder $query, array $data) {
                         $id = $data['id'] ?? null;
                         if (!$id) return $query;
-
                         return $query->where('causer_type', \App\Models\User::class)
                             ->where('causer_id', $id);
                     })
                     ->indicateUsing(function (array $data) {
                         $id = $data['id'] ?? null;
                         if (!$id) return null;
-                        $name = \App\Models\User::whereKey($id)->value('name');
+                        $name = \App\Models\User::find($id)?->name;
                         return $name ? "User: {$name}" : null;
                     }),
 
-                // 4a) Objek by kelas model (subject_type)
+                // --- 5. Filter Tipe Objek ---
                 Tables\Filters\SelectFilter::make('subject_type')
-                    ->label('Objek (tipe)')
+                    ->label('Tipe Objek')
                     ->options(fn () => Activity::query()
                         ->whereNotNull('subject_type')
                         ->distinct()
@@ -157,44 +223,24 @@ class ActivityLogResource extends Resource
                         ->all()
                     ),
 
-                // 5) Rentang waktu custom
+                // --- 6. Filter Rentang Waktu Manual ---
                 Tables\Filters\Filter::make('created_between')
                     ->label('Rentang Waktu')
                     ->form([
-                        Forms\Components\DatePicker::make('from')
-                            ->label('Dari')
-                            ->native(false)              
-                            ->displayFormat('d/m/Y')
-                            ->closeOnDateSelection(),
-                        Forms\Components\DatePicker::make('to')
-                            ->label('Sampai')
-                            ->native(false)
-                            ->displayFormat('d/m/Y')
-                            ->closeOnDateSelection(),
+                        Forms\Components\DatePicker::make('from')->label('Dari')->native(false)->displayFormat('d/m/Y'),
+                        Forms\Components\DatePicker::make('to')->label('Sampai')->native(false)->displayFormat('d/m/Y'),
                     ])
                     ->query(function (Builder $query, array $data) {
-                        $from = filled($data['from'] ?? null) ? \Illuminate\Support\Carbon::parse($data['from'])->startOfDay() : null;
-                        $to   = filled($data['to']   ?? null) ? \Illuminate\Support\Carbon::parse($data['to'])->endOfDay()   : null;
-
+                        $from = filled($data['from'] ?? null) ? Carbon::parse($data['from'])->startOfDay() : null;
+                        $to   = filled($data['to']   ?? null) ? Carbon::parse($data['to'])->endOfDay()   : null;
                         if ($from) $query->where('created_at', '>=', $from);
                         if ($to)   $query->where('created_at', '<=', $to);
-
                         return $query;
-                    })
-                    ->indicateUsing(function (array $data) {
-                        $fmt = fn ($d) => \Illuminate\Support\Carbon::parse($d)->format('d/m/Y');
-                        $from = $data['from'] ?? null;
-                        $to   = $data['to']   ?? null;
-
-                        if ($from && $to) return 'Dari ' . $fmt($from) . ' s/d ' . $fmt($to);
-                        if ($from)         return 'Dari ' . $fmt($from);
-                        if ($to)           return 'Sampai ' . $fmt($to);
-                        return null;
                     }),
-
-                // 6) Hanya yang ada perubahan
+                    
+                // --- 7. Filter Hanya Perubahan ---
                 Tables\Filters\TernaryFilter::make('with_diff')
-                    ->label('Hanya yg ada perubahan')
+                    ->label('Hanya yg ada perubahan data')
                     ->queries(
                         true: fn ($q) => $q->whereNotNull('properties->attributes'),
                         false: fn ($q) => $q->whereNull('properties->attributes'),
@@ -221,5 +267,4 @@ class ActivityLogResource extends Resource
     {
         return \Spatie\Activitylog\Models\Activity::class;
     }
-
 }
