@@ -161,7 +161,9 @@ class BerkasResource extends Resource
                             $ver = $record->addVersionFromUpload($file);
                             return $ver['file_path'] ?? $record->dokumen;
                         }
-                        return $file->store('berkas/tmp', 'private');
+
+                        $filename = time() . '_' . $file->getClientOriginalName(); 
+                        return $file->storeAs('berkas/tmp', $filename, 'private');
                     })
                     ->deleteUploadedFileUsing(fn () => null)
                     ->hintAction(
@@ -477,7 +479,9 @@ class BerkasResource extends Resource
                     Tables\Actions\DeleteBulkAction::make()
                         ->visible(fn () => auth()->user()?->hasRole('Admin') ?? false),
                 ]),
-            ]);
+            ])
+            ->recordUrl(null)
+            ->recordAction('view');
     }
     
     public static function getRelations(): array

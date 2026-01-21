@@ -93,13 +93,16 @@ class ListBerkas extends ListRecords
 
     /** (tetap ada utk versi dokumen berkas) */
     #[\Livewire\Attributes\On('doc-delete-version')]
-    public function onDocDeleteVersion(
-        string $type = 'berkas',
-        int $id = 0,
-        int $index = -1,
-        string $path = ''
-    ): void {
+    public function onDocDeleteVersion(array $data): void 
+    {
+        // Ambil nilai dari array payload, atau gunakan default jika tidak ada
+        $type  = $data['type'] ?? 'berkas';
+        $id    = $data['id'] ?? 0;
+        $index = $data['index'] ?? -1;
+        $path  = $data['path'] ?? '';
+
         try {
+            // Logic validasi tetap sama
             if ($type !== 'berkas') {
                 throw new \RuntimeException('Tipe tidak dikenali.');
             }
@@ -107,6 +110,7 @@ class ListBerkas extends ListRecords
             $berkas = Berkas::findOrFail($id);
 
             if ($path !== '') {
+                // Pencarian index berdasarkan path
                 $idxByPath = $berkas->versionsList()->search(
                     fn ($v) => (string)($v['file_path'] ?? $v['path'] ?? '') === (string)$path
                 );

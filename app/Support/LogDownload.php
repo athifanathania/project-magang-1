@@ -3,10 +3,11 @@
 namespace App\Support;
 
 use Spatie\Activitylog\Models\Activity;
+use Illuminate\Support\Str;
 
-// Import semua Model yang ada di folder App\Models kamu
+// Import semua Model
 use App\Models\Berkas;
-use App\Models\Regular; // Pastikan file ini ada
+use App\Models\Regular;
 use App\Models\Lampiran;
 use App\Models\ImmManualMutu;
 use App\Models\ImmProsedur;
@@ -19,14 +20,39 @@ class LogDownload
 {
     public static function make(array $data): void
     {
-        // 1. Ambil ID dan Type dari data yang dikirim
         $id = $data['record_id'] ?? null;
         $type = $data['type'] ?? '';
+        $rawFile = $data['file'] ?? '-';
 
-        // 2. Tentukan Model mana yang sedang di-download (Mapping Object)
-        // Sesuaikan string di kiri ('imm-manual-mutu') dengan parameter 'type' dari tombol download di view kamu.
+        // -----------------------------------------------------------
+        // 1. LOGIKA LABEL OTOMATIS
+        // -----------------------------------------------------------
+        
+        // Tentukan Kategori Utama
+        $kategori = 'Dokumen Lainnya';
+        if (str_starts_with($type, 'imm-')) {
+            $kategori = 'Dokumen Internal';
+        } elseif ($type === 'regular') {
+            $kategori = 'Dokumen Eksternal';
+        } elseif (in_array($type, ['berkas', 'lampiran'])) {
+            $kategori = 'Dokumen Pendukung';
+        }
+
+        // Tentukan Nama Halaman yang Cantik
+        $halaman = Str::of($type)
+            ->replace('imm-', '')
+            ->replace('-', ' ')
+            ->title()
+            ->value(); // Pastikan jadi string murni
+
+        // Gabungkan jadi Label Objek
+        // Contoh: "Dokumen Internal # Manual Mutu"
+        $customLabel = "{$kategori} # {$halaman}";
+
+        // -----------------------------------------------------------
+        // 2. MAPPING MODEL
+        // -----------------------------------------------------------
         $subject = match ($type) {
-            // Mapping untuk Dokumen IMM
             'imm-manual-mutu'       => ImmManualMutu::find($id),
             'imm-prosedur'          => ImmProsedur::find($id),
             'imm-instruksi-standar' => ImmInstruksiStandar::find($id),
@@ -34,32 +60,36 @@ class LogDownload
             'imm-audit-internal'    => ImmAuditInternal::find($id),
             'imm-lampiran'          => ImmLampiran::find($id),
             
-            // Mapping untuk Dokumen Lain (sesuai file di sidebar kamu)
             'berkas'                => Berkas::find($id),
             'lampiran'              => Lampiran::find($id),
-            'regular'               => Regular::find($id), 
+            'regular'               => Regular::find($id),
 
             default => null,
         };
 
-        // 3. Buat Activity Instance
+        // -----------------------------------------------------------
+        // 3. SIMPAN LOG
+        // -----------------------------------------------------------
         $activity = activity('web')
             ->causedBy(auth()->user())
             ->withProperties([
-                'page'      => $data['page']      ?? null,
-                'type'      => $data['type']      ?? null,
-                'file'      => $data['file']      ?? null,
-                'version'   => $data['version']   ?? null,
-                'record_id' => $data['record_id'] ?? null,
-                'path'      => $data['path']      ?? null,
+                'object_label' => $customLabel, // Ini yang ditampilkan di tabel
+                
+                // Data cadangan
+                'category'  => $kategori,
+                'page'      => $halaman,
+                'type'      => $type,
+                'file'      => $rawFile,
+                'version'   => $data['version'] ?? null,
+                'path'      => $data['path'] ?? null,
+                'ip'        => request()->ip(),
+                'user_agent'=> request()->userAgent(),
             ]);
 
-        // 4. PENTING: Jika subject ditemukan, kaitkan log ini dengan object tersebut
         if ($subject) {
             $activity->performedOn($subject);
         }
 
-        // 5. Simpan log
-        $activity->event('download')->log('download');
+        $activity->event('download')->log("Download: {$rawFile}");
     }
 }

@@ -15,7 +15,7 @@ class ImmFormulir extends Model
 
     public function getActivityDisplayName(): ?string
     {
-        return $this->nama_dokumen ?? "Formulir #{$this->id}";
+        return "Formulir: " . ($this->nama_dokumen ?? "#{$this->id}");
     }
 
     public function getActivitylogOptions(): LogOptions
@@ -28,6 +28,16 @@ class ImmFormulir extends Model
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs()
             ->setDescriptionForEvent(fn (string $e) => "Formulir {$e}");
+    }
+
+    // --- TAMBAHAN: Agar IP & User Agent Terekam ---
+    public function tapActivity(\Spatie\Activitylog\Contracts\Activity $activity, string $eventName)
+    {
+        $activity->properties = $activity->properties->merge([
+            'ip' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'url' => request()->header('Referer') ?? request()->fullUrl(),
+        ]);
     }
 
     protected $table = 'imm_formulir';

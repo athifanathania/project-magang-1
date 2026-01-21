@@ -4,9 +4,10 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Models\Concerns\HasBerkasVersions;        // reuse persis
+use App\Models\Concerns\HasBerkasVersions;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
+use Spatie\Activitylog\Contracts\Activity;
 use App\Models\Concerns\HumanReadableActivity;
 
 class Regular extends Model
@@ -26,7 +27,6 @@ class Regular extends Model
         'dokumen_src_uploaded_at'  => 'datetime',
     ];
 
-    /** relasi lampiran (opsional) */
     public function lampirans()
     {
         return $this->hasMany(\App\Models\Lampiran::class, 'regular_id');
@@ -44,7 +44,11 @@ class Regular extends Model
 
     public function getActivityDisplayName(): ?string
     {
-        return $this->nama ?? "Regular #{$this->id}";
+        $nama = $this->nama ?? $this->getOriginal('nama') ?? $this->getAttribute('nama');
+        
+        $label = $nama ? $nama : "#{$this->id}";
+        
+        return "Regular: {$label}";
     }
 
     public function getActivitylogOptions(): LogOptions
@@ -58,4 +62,19 @@ class Regular extends Model
             ->setDescriptionForEvent(fn (string $e) => "Regular {$e}");
     }
 
+    public function tapActivity(Activity $activity, string $eventName)
+    {
+        $props = collect($activity->properties ?? []);
+
+        $props = $props->merge([
+            'ip' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'url' => request()->header('Referer') ?? request()->fullUrl(), 
+        ]);
+
+        $labelSnapshot = $this->getActivityDisplayName(); 
+        $props->put('object_label', $labelSnapshot);
+
+        $activity->properties = $props;
+    }
 }

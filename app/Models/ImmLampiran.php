@@ -1,24 +1,45 @@
 <?php
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\{BelongsTo, HasMany, MorphTo};
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Validation\ValidationException;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\Models\Activity;
 use App\Models\Concerns\HumanReadableActivity;
+use Illuminate\Support\Str;
 
 class ImmLampiran extends Model
 {
-    use SoftDeletes, LogsActivity, HumanReadableActivity {
-        HumanReadableActivity::tapActivity as private tapActivityLabel;
+    use SoftDeletes, LogsActivity, HumanReadableActivity;
+
+    public function getParentLabel(): string
+    {
+        if (!$this->documentable_type) return 'Lampiran';
+        $className = class_basename($this->documentable_type);
+        $cleanName = Str::replaceFirst('Imm', '', $className);
+        return Str::headline($cleanName);
     }
 
-    protected function belongsToAuditInternal(): bool
+    // --- PERUBAHAN UTAMA DI SINI ---
+    // Fungsi ini yang menentukan apa yang tampil di kolom "Objek"
+    public function getActivityDisplayName(): ?string
     {
-        return class_basename((string) $this->documentable_type) === 'ImmAuditInternal';
+        // 1. Ambil nama dasarnya (misal: "coba aja")
+        $basicName = $this->nama ?? basename($this->file) ?? "Lampiran #{$this->id}";
+        
+        // 2. Ambil jenis induknya (misal: "Manual Mutu")
+        $parentLabel = $this->getParentLabel();
+
+        // 3. Gabungkan jadi: "Manual Mutu: coba aja"
+        // (Pengecualian jika parentnya 'Lampiran' atau kosong, tampilkan nama saja)
+        if ($parentLabel === 'Lampiran' || empty($parentLabel)) {
+            return $basicName;
+        }
+
+        return "{$parentLabel}: {$basicName}";
     }
 
     public function getActivitylogOptions(): LogOptions
@@ -32,37 +53,42 @@ class ImmLampiran extends Model
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs()
             ->setDescriptionForEvent(function (string $event) {
-                return $this->belongsToAuditInternal()
-                    ? "List temuan audit {$event}"
-                    : "Lampiran Imm {$event}";
+                // Description: "Lampiran Imm Manual Mutu updated"
+                $parent = $this->getParentLabel(); 
+                return "Lampiran Imm {$parent} {$event}"; 
             });
     }
 
     public function tapActivity(Activity $activity, string $event): void
     {
-        // 1) Arahkan subject ke induk Audit Internal bila perlu
-        if ($this->belongsToAuditInternal()) {
+        // 1. Logic Subject (Khusus Audit Internal)
+        if ($this->getParentLabel() === 'Audit Internal') {
             $activity->subject_type = \App\Models\ImmAuditInternal::class;
             $activity->subject_id   = $this->documentable_id;
         }
 
-        // 2) Set object_label yang human-readable
         $props = collect($activity->properties ?? []);
+        $props = $props->merge([
+            'ip' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'url' => request()->header('Referer') ?? request()->fullUrl(),
+        ]);
 
+        // 2. Logic Label (Disederhanakan)
+        // Karena getActivityDisplayName() sekarang sudah mengandung "Manual Mutu: Nama",
+        // Kita tinggal panggil saja, tidak perlu digabung manual lagi agar tidak double.
+        $label = $this->getActivityDisplayName();
+
+        // Pengecualian Khusus Audit Internal
         if ($activity->subject_type === \App\Models\ImmAuditInternal::class) {
-            // Bangun label dari subjek (dokumen audit), bukan dari lampiran.
-            $parent = \App\Models\ImmAuditInternal::find($activity->subject_id);
-            $base   = class_basename(\App\Models\ImmAuditInternal::class);
+            $parentName = null;
+            try {
+                if ($this->documentable) {
+                    $parentName = $this->documentable->nama ?? $this->documentable->nama_dokumen;
+                }
+            } catch (\Throwable $e) {}
 
-            // Ambil “nama” yang paling masuk akal di model induk
-            $name = $parent->nama
-                ?? $parent->nama_dokumen
-                ?? "{$base}#{$activity->subject_id}";
-
-            $label = "{$base}: {$name}";
-        } else {
-            // Fallback: pakai helper dari trait (lampiran biasa, dll.)
-            $label = $this->activityObjectLabel();
+            $label = "Audit Internal: " . ($parentName ?? $activity->subject_id);
         }
 
         $activity->properties = $props->put('object_label', $label);
@@ -102,7 +128,6 @@ class ImmLampiran extends Model
 
     protected static function booted(): void
     {
-        // default sort_order di ekor saudara saat create
         static::creating(function (self $m) {
             if (is_null($m->sort_order)) {
                 $max = self::where('parent_id', $m->parent_id)->max('sort_order');
@@ -110,7 +135,6 @@ class ImmLampiran extends Model
             }
         });
 
-        // updating: simpan path & waktu 'terbit' versi lama
         static::updating(function (self $m) {
             if ($m->isDirty('file')) {
                 $m->oldFilePath   = $m->getOriginal('file');
@@ -120,7 +144,6 @@ class ImmLampiran extends Model
             }
         });
 
-        // saved: pindahkan file lama ke folder _versions + catat uploaded_at
         static::saved(function (self $m) {
             if ($m->wasChanged('file') && $m->oldFilePath) {
                 $m->appendFileVersion($m->oldFilePath, auth()->id(), $m->oldUploadedAt);
@@ -135,7 +158,6 @@ class ImmLampiran extends Model
         });
     }
 
-    // terima uploadedAt lama
     public function appendFileVersion(?string $oldPath, ?int $userId = null, ?string $uploadedAt = null): void
     {
         if (!$oldPath) return;
@@ -143,12 +165,10 @@ class ImmLampiran extends Model
         $disk = \Storage::disk('private');
         if (!$disk->exists($oldPath)) return;
 
-        // 1) Pindahkan file fisik ke folder _versions/{id}/...
         $newPath = 'imm_lampiran/_versions/'.$this->id.'/'.now()->format('Ymd_His').'-'.basename($oldPath);
         $disk->makeDirectory(dirname($newPath));
         $disk->move($oldPath, $newPath);
 
-        // 2) Normalisasi file_versions -> pisah versi numerik & meta
         $raw = $this->getAttribute('file_versions');
         if ($raw instanceof \Illuminate\Support\Collection) $raw = $raw->all();
         elseif (is_string($raw)) { $dec = json_decode($raw, true); $raw = is_array($dec) ? $dec : []; }
@@ -160,18 +180,16 @@ class ImmLampiran extends Model
             $isNumeric = is_int($k) || ctype_digit((string)$k);
             if ($isNumeric) {
                 if (is_array($v) && (isset($v['file_path']) || isset($v['path']) || isset($v['filename']))) {
-                    $versions[] = $v; // rebase 0..n-1
+                    $versions[] = $v;
                 }
             } else {
                 $meta[$k] = $v;
             }
         }
 
-        // 3) Ambil deskripsi versi AKTIF dari meta, lalu kosongkan meta tsb
         $currentDesc = trim((string)($meta['__current_desc'] ?? ''));
-        unset($meta['__current_desc']); // versi baru harus mulai tanpa deskripsi
+        unset($meta['__current_desc']);
 
-        // 4) Tambah entry versi (untuk file lama yang baru dipindah)
         $versions[] = [
             'file_path' => $newPath,
             'filename'    => basename($oldPath),
@@ -183,56 +201,42 @@ class ImmLampiran extends Model
             'description' => $currentDesc !== '' ? $currentDesc : null,
         ];
 
-        // 5) Satukan kembali: versi numerik + meta non-numerik
         $out = $versions;
         foreach ($meta as $k => $v) { $out[$k] = $v; }
 
         $this->file_versions = $out;
-
-        // set sort_order default di ekor list saudara
-        static::creating(function (self $m) {
-            if (is_null($m->sort_order)) {
-                $max = self::where('parent_id', $m->parent_id)->max('sort_order');
-                $m->sort_order = is_null($max) ? 1 : ($max + 1);
-            }
-        });
     }
 
 
     public function deleteVersionAtIndex(int $index): bool
     {
-        // --- Normalisasi raw
         $raw = $this->getAttribute('file_versions');
         if ($raw instanceof \Illuminate\Support\Collection) $raw = $raw->all();
         elseif (is_string($raw)) { $dec = json_decode($raw, true); $raw = is_array($dec) ? $dec : []; }
         elseif (!is_array($raw)) { $raw = []; }
 
-        // --- Pisah versi numerik valid & meta non-numerik (termasuk __current_desc)
         $versions = [];
         $meta     = [];
         foreach ($raw as $k => $v) {
             $isNumeric = is_int($k) || ctype_digit((string)$k);
             if ($isNumeric) {
                 if (is_array($v) && (isset($v['file_path']) || isset($v['path']) || isset($v['filename']))) {
-                    $versions[] = $v; // rebase 0..n-1
+                    $versions[] = $v;
                 }
             } else {
                 $meta[$k] = $v;
             }
         }
 
-        // --- Validasi index
         if ($index < 0 || $index >= count($versions)) return false;
 
-        // --- Hapus file fisik (jika ada) lalu keluarkan dari array
         $disk = \Storage::disk('private');
         $v    = $versions[$index] ?? null;
         if (is_array($v) && !empty($v['file_path']) && $disk->exists($v['file_path'])) {
             $disk->delete($v['file_path']);
         }
-        array_splice($versions, $index, 1); // reindex otomatis 0..n-2
+        array_splice($versions, $index, 1);
 
-        // --- Satukan kembali: versi numerik + meta TETAP ADA
         $out = array_values($versions);
         foreach ($meta as $k => $val) { $out[$k] = $val; }
 
@@ -241,5 +245,4 @@ class ImmLampiran extends Model
 
         return true;
     }
-
 }

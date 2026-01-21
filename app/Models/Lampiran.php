@@ -16,7 +16,17 @@ class Lampiran extends Model
 
     public function getActivityDisplayName(): ?string
     {
-        return $this->nama ?? "Lampiran #{$this->id}";
+        $label = $this->nama ?? "Lampiran #{$this->id}";
+
+        if ($this->regular_id) {
+            return "Regular: {$label}"; // Output: "Regular: Nama File"
+        }
+
+        if ($this->berkas_id) {
+            return "Event: {$label}";   // Output: "Event: Nama File"
+        }
+
+        return $label;
     }
 
     public function getActivitylogOptions(): LogOptions
@@ -26,7 +36,18 @@ class Lampiran extends Model
             ->logOnly(['nama','file','keywords','parent_id','berkas_id','regular_id'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs()
-            ->setDescriptionForEvent(fn (string $e) => "Lampiran {$e}");
+            ->setDescriptionForEvent(function (string $eventName) {
+                $jenis = '';
+                
+                if (!empty($this->regular_id)) {
+                    $jenis = 'Regular';
+                } 
+                elseif (!empty($this->berkas_id)) {
+                    $jenis = 'Event';
+                }
+
+                return trim("Lampiran {$jenis} {$eventName}");
+            });
     }
 
     protected $guarded = [];

@@ -55,16 +55,20 @@ class ActivityLogResource extends Resource
                     ->verticalAlignment('start'),
 
                 // 3. AKSI
-                Tables\Columns\BadgeColumn::make('event')
+                Tables\Columns\TextColumn::make('event')
                     ->label('Aksi')
-                    ->colors([
-                        'primary' => ['view'],
-                        'success' => ['login','create','version_add','version_replace','version_reopen', 'download'],
-                        'warning' => ['update','version_desc_update'],
-                        'danger'  => ['delete','version_delete','logout'],
-                    ])
+                    ->badge() 
+                    ->searchable()
                     ->sortable()
-                    ->verticalAlignment('start'),
+                    // ->verticalAlignment('start')
+                    // ->formatStateUsing(fn (string $state): string => ucwords(str_replace('_', ' ', $state)))
+                    ->color(fn (string $state): string => match ($state) {
+                        'view'                                                                         => 'primary', // View biasanya netral
+                        'login', 'created', 'create', 'version_add', 'version_replace', 'version_reopen', 'download' => 'success', // Hijau
+                        'updated', 'update', 'version_desc_update'                                     => 'warning', // Kuning/Oranye
+                        'deleted', 'delete', 'version_delete', 'logout'                                => 'danger', // Merah
+                        default                                                                        => 'primary', // Warna default jika tidak ada yang cocok
+                    }),
 
                 // 4. DESKRIPSI (Updated agar rapi ada '...')
                 Tables\Columns\TextColumn::make('description')
@@ -79,22 +83,20 @@ class ActivityLogResource extends Resource
                 Tables\Columns\TextColumn::make('subject_type')
                     ->label('Objek')
                     ->getStateUsing(function (\Spatie\Activitylog\Models\Activity $record) {
-                        
-                        // --- 1. PRIORITAS UTAMA: Cek titipan label custom ---
-                        // (Ini yang memperbaiki masalah Anda)
-                        $label = $record->getExtraProperty('object_label');
-                        if (filled($label)) {
-                            return $label;
-                        }
 
-                        // --- 2. Logic Khusus User ---
                         if ($record->subject_type === \App\Models\User::class && $record->subject) {
                             return $record->subject->name . ' #' . ($record->subject->department ?? '-');
                         }
 
-                        // --- 3. Logic Berkas/Regular (via function getActivityDisplayName) ---
+                        // --- 2. PRIORITAS UTAMA: Function Model (Live Data) ---
                         if ($record->subject && method_exists($record->subject, 'getActivityDisplayName')) {
                             return $record->subject->getActivityDisplayName();
+                        }
+
+                        // --- 3. Cek titipan label custom (Cadangan / Data Terhapus) ---
+                        $label = $record->getExtraProperty('object_label');
+                        if (filled($label)) {
+                            return str_replace('Berkas: Event:', 'Event:', $label);
                         }
 
                         // --- 4. Fallback Terakhir ---
@@ -104,7 +106,6 @@ class ActivityLogResource extends Resource
                     ->wrap()
                     ->lineClamp(2)
                     ->tooltip(fn ($state) => $state)
-                    // Searchable tetap bisa dipasang, tapi dia hanya cari berdasarkan subject_type asli database
                     ->searchable() 
                     ->verticalAlignment('start')
                     ->color(fn ($record) => $record->subject_type === \App\Models\User::class ? 'info' : null),
@@ -152,22 +153,6 @@ class ActivityLogResource extends Resource
                         };
                     }),
 
-                // --- 2. Filter Khusus Halaman (BARU) ---
-                // Tables\Filters\SelectFilter::make('halaman_view')
-                //     ->label('Halaman (Page)')
-                //     ->options(fn () => Activity::query()
-                //         ->where('event', 'view') // Hanya ambil event 'view'
-                //         ->distinct()
-                //         ->pluck('description', 'description') // Ambil kolom description
-                //         ->sort()
-                //         ->all()
-                //     )
-                //     ->searchable() // Biar gampang cari kalau halamannya banyak
-                //     ->query(function (Builder $query, array $data) {
-                //         if (empty($data['value'])) return $query;
-                //         return $query->where('description', $data['value']);
-                //     }),
-
                 // --- 3. Filter Event/Aksi ---
                 Tables\Filters\SelectFilter::make('event')
                     ->label('Jenis Aksi')
@@ -176,9 +161,9 @@ class ActivityLogResource extends Resource
                         'logout'           => 'Logout',
                         'view'             => 'Melihat Halaman (View)', // Label diperjelas
                         'download'         => 'Download',
-                        'create'           => 'Create (Tambah)',
-                        'update'           => 'Update (Edit)',
-                        'delete'           => 'Delete (Hapus)',
+                        'created'           => 'Create (Tambah)',
+                        'updated'           => 'Update (Edit)',
+                        'deleted'           => 'Delete (Hapus)',
                         'version_add'      => 'Version Add',
                         'version_replace'  => 'Version Replace',
                         'version_reopen'   => 'Version Reopen',

@@ -4,7 +4,7 @@ namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use Filament\Support\Facades\FilamentView;
-use Illuminate\Support\Facades\DB;   
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Database\Eloquent\Relations\Relation;
 
@@ -23,13 +23,19 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Teks di bawah form login admin (punyamu sudah oke)
+        Relation::morphMap([
+            'ImmManualMutu'       => \App\Models\ImmManualMutu::class,
+            'ImmProsedur'         => \App\Models\ImmProsedur::class,
+            'ImmFormulir'         => \App\Models\ImmFormulir::class,
+            'ImmInstruksiStandar' => \App\Models\ImmInstruksiStandar::class,
+            'ImmAuditInternal'    => \App\Models\ImmAuditInternal::class,
+        ]);
+
         FilamentView::registerRenderHook(
             'panels::auth.login.form.after',
             fn (): string => view('auth.login-note')->render(),
         );
 
-        // Pasang SQL logger hanya saat web request (bukan saat artisan command)
         if (! app()->runningInConsole()) {
             DB::listen(function ($query) {
                 if (request()->is('admin/berkas*')) {

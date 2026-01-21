@@ -15,7 +15,7 @@ class ImmInstruksiStandar extends Model
 
     public function getActivityDisplayName(): ?string
     {
-        return $this->nama_dokumen ?? "Instruksi Standar #{$this->id}";
+        return "Instruksi Standar: " . ($this->nama_dokumen ?? "#{$this->id}");
     }
 
     public function getActivitylogOptions(): LogOptions
@@ -30,7 +30,15 @@ class ImmInstruksiStandar extends Model
             ->setDescriptionForEvent(fn (string $e) => "Instruksi Standar {$e}");
     }
 
-
+    // --- TAMBAHAN: Agar IP & User Agent Terekam ---
+    public function tapActivity(\Spatie\Activitylog\Contracts\Activity $activity, string $eventName)
+    {
+        $activity->properties = $activity->properties->merge([
+            'ip' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'url' => request()->header('Referer') ?? request()->fullUrl(),
+        ]);
+    }
 
     protected $table = 'imm_instruksi_standar';
 

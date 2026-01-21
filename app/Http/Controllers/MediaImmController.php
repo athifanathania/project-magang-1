@@ -41,19 +41,17 @@ class MediaImmController extends Controller
         $response = response()->file($full, [
             'Content-Type'           => $mime,
             'Content-Disposition'    => ($ext === 'pdf' ? 'inline' : 'attachment') . '; filename="'.$name.'"',
-            'Accept-Ranges'          => 'bytes', // bantu viewer Edge
-            // 'X-Content-Type-Options' => 'nosniff', // jika Edge masih error, coba sementara NONAKTIFKAN baris ini
+            'Accept-Ranges'          => 'bytes',
         ]);
 
-        // Tambahkan ETag & Last-Modified (membantu caching & range)
         if (is_file($full)) {
             $response->setEtag(md5_file($full));
             $response->setLastModified(\Illuminate\Support\Carbon::createFromTimestamp(filemtime($full)));
         }
 
+        // PERHATIKAN: Kita menambahkan prefix 'imm-' di sini
         LogDownload::make([
-            'page'      => 'IMM ' . $type,
-            'type'      => 'imm-' . $type,  
+            'type'      => 'imm-' . $type, 
             'file'      => basename($path),
             'record_id' => $m->id,
             'path'      => $path,
@@ -62,7 +60,6 @@ class MediaImmController extends Controller
         return $response;
     }
 
-    /** Download salah satu versi (index 0-based sesuai urutan tersimpan di kolom `versions`) */
     public function version(Request $req, string $type, int $id, int $index)
     {
         $modelClass = $this->mapTypeToModel($type);
@@ -71,7 +68,6 @@ class MediaImmController extends Controller
         /** @var \Illuminate\Database\Eloquent\Model|\App\Models\Concerns\HasImmVersions $m */
         $m = $modelClass::findOrFail($id);
 
-        // Role minimal: Admin/Editor/Staff (viewer tidak boleh)
         $user = $req->user();
         abort_unless($user && $user->hasAnyRole(['Admin','Editor','Staff']), 403);
 
@@ -85,7 +81,6 @@ class MediaImmController extends Controller
         $downloadName = (string) ($v['filename'] ?? basename($path));
 
         LogDownload::make([
-            'page'      => 'IMM ' . $type,
             'type'      => 'imm-' . $type,
             'file'      => $downloadName,
             'version'   => 'REV' . str_pad($index + 1, 2, '0', STR_PAD_LEFT),

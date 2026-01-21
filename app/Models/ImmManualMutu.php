@@ -15,8 +15,7 @@ class ImmManualMutu extends Model
 
     public function getActivityDisplayName(): ?string
     {
-        // Pastikan ini sesuai kolom di database, misalnya 'nama_dokumen'
-        return $this->nama_dokumen ?? "Manual Mutu #{$this->id}";
+        return "Manual Mutu: " . ($this->nama_dokumen ?? "#{$this->id}");
     }
 
     public function getActivitylogOptions(): LogOptions
@@ -31,6 +30,15 @@ class ImmManualMutu extends Model
             ->setDescriptionForEvent(fn (string $e) => "Manual Mutu {$e}");
     }
 
+    // --- TAMBAHAN: Agar IP & User Agent Terekam ---
+    public function tapActivity(\Spatie\Activitylog\Contracts\Activity $activity, string $eventName)
+    {
+        $activity->properties = $activity->properties->merge([
+            'ip' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'url' => request()->header('Referer') ?? request()->fullUrl(),
+        ]);
+    }
 
     protected $table = 'imm_manual_mutu';
 

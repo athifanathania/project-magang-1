@@ -40,21 +40,45 @@ class RegularResource extends Resource
         $components = collect($baseForm->getComponents())->map(function ($c) {
             if ($c instanceof \Filament\Forms\Components\FileUpload) {
                 if ($c->getName() === 'dokumen') {
+                    // 1. Set Disk & Directory
                     $c->disk('private')->directory('regular')
-                        ->hintAction(
-                            \Filament\Forms\Components\Actions\Action::make('openFile')
-                                ->label('Buka file')
-                                ->url(
-                                    fn ($record) => ($record && $record->dokumen)
-                                        ? route('media.regular', $record)
-                                        : null,
-                                    shouldOpenInNewTab: true
-                                )
-                                ->visible(fn ($record) =>
-                                    filled($record?->dokumen)
-                                    && (auth()->user()?->hasAnyRole(['Admin','Editor','Staff']) ?? false)
-                                )
+                    
+                    // 2. Pastikan preserveFilenames aktif
+                    ->preserveFilenames()
+
+                    // 3. TIMPA logika penyimpanan agar nama file tetap asli
+                    ->saveUploadedFileUsing(function ($file, $record) {
+                        // A. Jika Edit (Record sudah ada), pakai logika versioning
+                        if ($record) {
+                            // Pastikan trait HasBerkasVersions menangani nama file di dalamnya
+                            $ver = $record->addVersionFromUpload($file);
+                            return $ver['file_path'] ?? $record->dokumen;
+                        }
+
+                        // B. Jika Create (Baru), simpan manual dengan nama ASLI
+                        // Gunakan storeAs, bukan store
+                        return $file->storeAs(
+                            'regular', // folder tujuan
+                            $file->getClientOriginalName(), // nama file asli
+                            'private' // disk
                         );
+                    });
+
+                    // 4. Hint Action (Tombol Buka File)
+                    $c->hintAction(
+                        \Filament\Forms\Components\Actions\Action::make('openFile')
+                            ->label('Buka file')
+                            ->url(
+                                fn ($record) => ($record && $record->dokumen)
+                                    ? route('media.regular', $record)
+                                    : null,
+                                shouldOpenInNewTab: true
+                            )
+                            ->visible(fn ($record) =>
+                                filled($record?->dokumen)
+                                && (auth()->user()?->hasAnyRole(['Admin','Editor','Staff']) ?? false)
+                            )
+                    );
                 }
 
                 // Thumbnail → tetap di public, tapi pisahkan folder biar rapi
@@ -277,7 +301,8 @@ class RegularResource extends Resource
                     ->label('')
                     ->icon('heroicon-m-pencil')
                     ->tooltip('Edit')
-                    ->visible(fn () => auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false),
+                    // ->visible(fn () => auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false)
+                    ,
 
                 \Filament\Tables\Actions\DeleteAction::make()
                     ->label('')
@@ -299,7 +324,9 @@ class RegularResource extends Resource
                     ->extraAttributes(fn ($record) => [
                         'title' => blank($record->dokumen_src) ? 'File asli belum diunggah' : 'Download file asli',
                     ]),
-            ]);
+            ])
+            ->recordUrl(null)
+            ->recordAction('view');
     }
 
     public static function getPages(): array

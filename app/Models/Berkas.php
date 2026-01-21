@@ -15,13 +15,14 @@ class Berkas extends Model
 
     public function getActivityDisplayName(): ?string
     {
-        $label = $this->nama ?? 'Berkas Tanpa Nama';
+        $label = $this->nama ?? 'Event Tanpa Nama'; 
         
+        $identifier = $label;
         if (!empty($this->kode_berkas)) {
-            return "{$this->kode_berkas} - {$label}";
+            $identifier = "{$this->kode_berkas} - {$label}";
         }
 
-        return $label;
+        return "Event: {$identifier}";
     }
 
     public function getActivitylogOptions(): LogOptions
@@ -32,7 +33,7 @@ class Berkas extends Model
             ->logExcept(['dokumen_versions','dokumen_src_versions','updated_at','created_at'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs()
-            ->setDescriptionForEvent(fn (string $e) => "Dokumen {$e}");
+            ->setDescriptionForEvent(fn (string $e) => "Event {$e}");
     }
 
 

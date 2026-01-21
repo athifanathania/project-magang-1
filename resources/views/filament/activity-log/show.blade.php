@@ -13,20 +13,24 @@
     $objectLabel = '-';
     $isUserObject = false;
     
-    // Cek properti custom label dulu
+    // 1. Cek properti custom label dulu (biasanya titipan controller)
     if ($customLabel = $record->getExtraProperty('object_label')) {
         $objectLabel = $customLabel;
     } 
-    // Jika Subject adalah User
+    // 2. Jika Subject adalah User
     elseif ($record->subject_type === \App\Models\User::class && $record->subject) {
         $objectLabel = $record->subject->name . ' #' . ($record->subject->department ?? '-');
         $isUserObject = true;
     } 
-    // Default
+    // 3. (BARU) Cek Function Model (Ini yang memanggil Part Name dari Model Regular)
+    elseif ($record->subject && method_exists($record->subject, 'getActivityDisplayName')) {
+        $objectLabel = $record->subject->getActivityDisplayName();
+    }
+    // 4. Default Fallback
     elseif ($record->subject_type) {
         $objectLabel = class_basename($record->subject_type) . ' #' . $record->subject_id;
     }
-@endphp
+@endphp 
 
 <div class="space-y-6">
 
@@ -99,15 +103,99 @@
         </div>
     </div>
 
-    {{-- PERUBAHAN DATA (DIFF) --}}
-    @if ($diff = data_get($p, 'attributes'))
-        <div class="mt-2">
-            <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-1">Data Changes</span>
-            <div class="rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <pre class="text-xs bg-gray-50 dark:bg-gray-900 p-3 overflow-x-auto font-mono text-gray-600 dark:text-gray-300">{{ json_encode([
-    'new' => $p['attributes'] ?? [],
-    'old' => $p['old'] ?? [],
-], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre>
+    {{-- PERUBAHAN DATA (DIFF) - TAMPILAN TABEL GRID TEGAS --}}
+    @php
+        $new = $p['attributes'] ?? $p['new'] ?? [];
+        $old = $p['old'] ?? [];
+
+        // Daftar field yang disembunyikan
+        $hiddenFields = [
+            'id', 'created_at', 'updated_at', 'deleted_at', 
+            'uuid', 'user_id', 'team_id', 'model_type', 'model_id',
+            'dokumen_src', 'thumbnail', 'is_public', 
+            'dokumen_src_uploaded_at', 'kode_berkas_ci',
+        ];
+    @endphp
+
+    @if (!empty($new) || !empty($old))
+        <div class="mt-4">
+            <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-2">
+                Rincian Perubahan Data
+            </span>
+            
+            <div class="overflow-x-auto rounded border border-gray-300">
+                <table class="w-full text-sm text-left border-collapse">
+                    {{-- HEADER --}}
+                    <thead>
+                        <tr class="bg-gray-100 text-gray-600 uppercase text-xs">
+                            <th class="px-4 py-3 font-bold border-b border-r border-gray-300 w-1/3">Field</th>
+                            @if(!empty($old))
+                                <th class="px-4 py-3 font-bold border-b border-r border-gray-300 w-1/3">Sebelum</th>
+                                <th class="px-4 py-3 font-bold border-b border-gray-300 w-1/3">Sesudah</th>
+                            @else
+                                <th class="px-4 py-3 font-bold border-b border-gray-300">Isi Data</th>
+                            @endif
+                        </tr>
+                    </thead>
+
+                    {{-- BODY --}}
+                    <tbody class="divide-y divide-gray-200">
+                        @foreach ($new as $key => $value)
+                            @continue(in_array($key, $hiddenFields))
+
+                            <tr class="hover:bg-gray-50">
+                                {{-- Kolom Nama Field --}}
+                                <td class="px-4 py-2 font-medium text-gray-700 border-r border-gray-200 bg-gray-50/50 capitalize">
+                                    {{ str_replace(['_', '-'], ' ', $key) }}
+                                </td>
+
+                                {{-- Kolom Nilai Lama (Jika Update) --}}
+                                @if(!empty($old))
+                                    <td class="px-4 py-2 text-red-600 border-r border-gray-200 bg-red-50/20 text-xs font-mono break-all">
+                                        {{ $old[$key] ?? '-' }}
+                                    </td>
+                                @endif
+
+                                {{-- Kolom Nilai Baru --}}
+                                <td class="px-4 py-2 text-gray-800 break-all">
+                                    @if(is_bool($value))
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ $value ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
+                                            {{ $value ? 'Yes' : 'No' }}
+                                        </span>
+
+                                    {{-- PERBAIKAN: Handle jika datanya Array (seperti keywords) --}}
+                                    @elseif(is_array($value))
+                                        <div class="flex flex-wrap gap-1">
+                                            @forelse($value as $item)
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">
+                                                    {{ is_string($item) ? $item : json_encode($item) }}
+                                                </span>
+                                            @empty
+                                                <span class="text-gray-400 italic text-xs">Kosong</span>
+                                            @endforelse
+                                        </div>
+
+                                    {{-- Handle File / Path Panjang --}}
+                                    @elseif(is_string($value) && (str_contains($key, 'dokumen') || str_contains($value, 'tmp/') || str_contains($value, '/')))
+                                        <div class="flex flex-col gap-1">
+                                            <span class="text-blue-600 font-medium flex items-center gap-1">
+                                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                                                {{ basename($value) }}
+                                            </span>
+                                            <span class="text-[10px] text-gray-400 font-mono truncate max-w-xs" title="{{ $value }}">
+                                                {{ $value }}
+                                            </span>
+                                        </div>
+
+                                    {{-- Default String/Number --}}
+                                    @else
+                                        {{ $value }}
+                                    @endif
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
             </div>
         </div>
     @endif

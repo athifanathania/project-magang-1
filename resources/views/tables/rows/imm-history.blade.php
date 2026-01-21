@@ -15,10 +15,11 @@
     $all      = collect($rec?->file_versions ?? $rec?->versions ?? []);
     $versions = $all->reverse()->values();
 
-    $canEdit     = auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false;
-    $canDelete   = $canEdit;
-    $canDownload = $canEdit;              
-    $showActionsCol = $canEdit;
+    $user = auth()->user();
+    $canEdit   = $user?->hasRole('Admin') ?? false;
+    $canDelete = $canEdit; 
+    $canDownload = $user?->hasAnyRole(['Admin', 'Editor', 'Staff']) ?? false;
+    $showActionsCol = $canEdit || $canDelete || $canDownload;
 
     $tz = auth()->user()->timezone ?? config('app.timezone') ?: 'Asia/Jakarta';
     $fmtDate = function ($d) use ($tz) {

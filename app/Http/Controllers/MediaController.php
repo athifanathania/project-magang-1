@@ -9,7 +9,6 @@ use App\Support\LogDownload;
 
 class MediaController extends Controller
 {
-    /** Stream file dari disk private/public */
     protected function streamFromDisks(string $path)
     {
         foreach (['private', 'public'] as $disk) {
@@ -20,12 +19,11 @@ class MediaController extends Controller
         abort(404, 'File tidak ditemukan di storage.');
     }
 
-    /** Lihat file AKTIF dokumen berkas (diatur oleh Policy) */
     public function berkas(Berkas $berkas)
     {
-        $this->authorize('view', $berkas);   // pastikan BerkasPolicy@view ada
+        $this->authorize('view', $berkas);
+        
         LogDownload::make([
-            'page'      => 'berkas',
             'type'      => 'berkas', 
             'file'      => basename($berkas->dokumen),
             'record_id' => $berkas->id,
@@ -34,13 +32,12 @@ class MediaController extends Controller
         return $this->streamFromDisks((string) $berkas->dokumen);
     }
 
-    /** Lihat file AKTIF lampiran dari berkas tertentu (Policy berkas) */
     public function lampiran(Berkas $berkas, Lampiran $lampiran)
     {
         abort_if($lampiran->berkas_id !== $berkas->id, 404);
         $this->authorize('view', $berkas);
+        
         LogDownload::make([
-            'page'      => 'berkas-lampiran',
             'type'      => 'lampiran', 
             'file'      => basename($lampiran->file),
             'record_id' => $lampiran->id,
@@ -49,7 +46,7 @@ class MediaController extends Controller
         return $this->streamFromDisks((string) $lampiran->file);
     }
 
-    /** Download versi lama dokumen berkas (Admin/Editor saja) */
+    /** PERBAIKAN DI SINI (berkasVersion) */
     public function berkasVersion(Berkas $berkas, int $index)
     {
         abort_unless(auth()->user()?->hasAnyRole(['Admin','Editor']), 403);
@@ -58,24 +55,28 @@ class MediaController extends Controller
         abort_unless(isset($versions[$index]), 404);
 
         $v = $versions[$index];
-        abort_unless(Storage::disk('private')->exists($v['path'] ?? ''), 404);
+
+        // FIX: Cek 'path' ATAU 'file_path' agar tidak error undefined index
+        $fp = $v['path'] ?? $v['file_path'] ?? null;
+
+        // Pastikan path ada dan file fisik ada
+        abort_unless($fp && Storage::disk('private')->exists($fp), 404, 'File fisik versi ini tidak ditemukan.');
 
         LogDownload::make([
-            'page'      => 'berkas',
             'type'      => 'berkas', 
-            'file'      => $v['filename'] ?? basename($v['path']),
+            'file'      => $v['filename'] ?? basename($fp),
             'version'   => 'REV' . str_pad($index + 1, 2, '0', STR_PAD_LEFT),
             'record_id' => $berkas->id,
-            'path'      => $v['path'],
+            'path'      => $fp, // Gunakan $fp, jangan $v['path']
         ]);
 
         return Storage::disk('private')->download(
-            $v['path'],
-            $v['filename'] ?? basename($v['path'])
+            $fp,
+            $v['filename'] ?? basename($fp)
         );
     }
 
-    /** Download versi lama file lampiran (Admin/Editor saja) */
+    /** PERBAIKAN DI SINI JUGA (lampiranVersion) agar konsisten */
     public function lampiranVersion(Lampiran $lampiran, int $index)
     {
         abort_unless(auth()->user()?->hasAnyRole(['Admin','Editor']), 403);
@@ -84,12 +85,13 @@ class MediaController extends Controller
         abort_unless(isset($versions[$index]), 404);
 
         $v  = $versions[$index];
-        $fp = $v['file_path'] ?? null;
+        
+        // FIX: Cek 'path' ATAU 'file_path'
+        $fp = $v['path'] ?? $v['file_path'] ?? null;
 
         abort_unless($fp && Storage::disk('private')->exists($fp), 404);
 
         LogDownload::make([
-            'page'      => 'lampiran',
             'type'      => 'lampiran', 
             'file'      => $v['filename'] ?? basename($fp),
             'version'   => 'REV' . str_pad($index + 1, 2, '0', STR_PAD_LEFT),
@@ -106,12 +108,10 @@ class MediaController extends Controller
     public function lampiranRegular(\App\Models\Regular $regular, \App\Models\Lampiran $lampiran)
     {
         abort_if($lampiran->regular_id !== $regular->id, 404);
-
-        $this->authorize('view', $regular); // sesuaikan policy/guard kamu
+        $this->authorize('view', $regular);
 
         $path = (string) $lampiran->file;
         LogDownload::make([
-            'page'      => 'regular-lampiran',
             'type'      => 'lampiran', 
             'file'      => basename($lampiran->file),
             'record_id' => $lampiran->id,
@@ -120,5 +120,4 @@ class MediaController extends Controller
 
         return $this->streamFromDisks($path);
     }
-
 }

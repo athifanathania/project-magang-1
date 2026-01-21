@@ -18,21 +18,20 @@ class MediaRegularController extends Controller
         abort(404, 'File tidak ditemukan di storage.');
     }
 
-    /** Buka file aktif Regular */
     public function regular(Regular $regular)
     {
-        $this->authorize('view', $regular); // <- butuh RegularPolicy
+        $this->authorize('view', $regular); 
+        
         LogDownload::make([
-            'page'      => 'regular',
             'type'      => 'regular', 
             'file'      => basename($regular->dokumen),
             'record_id' => $regular->id,
             'path'      => $regular->dokumen,
         ]);
+
         return $this->streamFromDisks((string) $regular->dokumen);
     }
 
-    /** (opsional) Download versi lama dokumen Regular */
     public function regularVersion(Regular $regular, int $index)
     {
         $this->authorize('view', $regular);
@@ -45,7 +44,6 @@ class MediaRegularController extends Controller
         abort_unless($fp && Storage::disk('private')->exists($fp), 404);
 
         LogDownload::make([
-            'page'      => 'regular',
             'type'      => 'regular', 
             'file'      => $v['filename'] ?? basename($fp),
             'version'   => 'REV' . str_pad($index + 1, 2, '0', STR_PAD_LEFT),
