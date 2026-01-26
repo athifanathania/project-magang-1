@@ -342,7 +342,9 @@ class RegularResource extends Resource
     {
         $query = parent::getEloquentQuery()->with(['lampirans']);
         return $query->orderByRaw('LOWER(cust_name) ASC')
-                     ->orderByRaw('LOWER(model) ASC');
+                     ->orderByRaw('LOWER(model) ASC')
+                     ->orderByRaw('LOWER(kode_berkas) ASC')    
+                    ->orderByRaw('LOWER(nama) ASC');
     }
 
     public static function canViewAny(): bool

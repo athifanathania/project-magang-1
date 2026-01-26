@@ -48,8 +48,13 @@ class ActivityLogResource extends Resource
                 // 2. USER
                 Tables\Columns\TextColumn::make('causer.name')
                     ->label('User')
-                    ->toggleable()
                     ->searchable()
+                    ->getStateUsing(fn ($record) => $record->causer?->name ?? 'Public')
+                    
+                    ->color(fn (string $state): string => match ($state) {
+                        'Public' => 'danger',  
+                        default  => 'black',    
+                    })
                     ->wrap()
                     ->lineClamp(2) // Batasi 2 baris
                     ->verticalAlignment('start'),
@@ -233,12 +238,18 @@ class ActivityLogResource extends Resource
                     ),
             ])
             ->actions([
-                Tables\Actions\ViewAction::make()
+                Tables\Actions\ViewAction::make()->modalWidth('6xl')
                     ->label('Detail')->modalHeading('Detail Aktivitas')
                     ->modalContent(fn(Activity $record) => view('filament.activity-log.show', compact('record'))),
             ])
+            ->bulkActions([
+                Tables\Actions\BulkActionGroup::make([
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->visible(fn () => auth()->user()?->hasRole('Admin') ?? false),
+                ]),
+            ])
             ->defaultSort('created_at','desc')
-            ->paginationPageOptions([25,50,100]);
+            ->paginationPageOptions([10,25,50]);
     }
 
     public static function getPages(): array

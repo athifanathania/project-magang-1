@@ -67,13 +67,14 @@ class Regular extends Model
         $props = collect($activity->properties ?? []);
 
         $props = $props->merge([
-            'ip' => request()->ip(),
-            'user_agent' => request()->userAgent(),
-            'url' => request()->header('Referer') ?? request()->fullUrl(), 
+            'ip'            => request()->ip(),
+            'user_agent'    => request()->userAgent(),
+            'url'           => request()->header('Referer') ?? request()->fullUrl(), 
         ]);
 
         $labelSnapshot = $this->getActivityDisplayName(); 
-        $props->put('object_label', $labelSnapshot);
+        
+        $props->put('snapshot_name', $labelSnapshot); 
 
         $activity->properties = $props;
     }

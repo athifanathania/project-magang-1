@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use App\Models\ImmLampiran;
 use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Contracts\Activity; 
 use App\Models\Concerns\HumanReadableActivity;
 
 class ImmProsedur extends Model
@@ -30,13 +31,13 @@ class ImmProsedur extends Model
             ->setDescriptionForEvent(fn (string $e) => "Prosedur {$e}");
     }
 
-    // --- TAMBAHAN: Agar IP & User Agent Terekam ---
     public function tapActivity(\Spatie\Activitylog\Contracts\Activity $activity, string $eventName)
     {
         $activity->properties = $activity->properties->merge([
-            'ip' => request()->ip(),
-            'user_agent' => request()->userAgent(),
-            'url' => request()->header('Referer') ?? request()->fullUrl(),
+            'ip'            => request()->ip(),
+            'user_agent'    => request()->userAgent(),
+            'url'           => request()->header('Referer') ?? request()->fullUrl(),
+            'snapshot_name' => $this->getActivityDisplayName(),
         ]);
     }
 

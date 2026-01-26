@@ -1,36 +1,47 @@
 @php
     $p = $record->properties ?? collect();
     
-    // Logic Warna Badge Aksi
+    // --- WARNA LABEL EVENT ---
     $eventColor = match($record->event) {
-        'login', 'create', 'restore', 'download' => 'text-success-700 bg-success-50 ring-success-600/20',
-        'update', 'version_desc_update' => 'text-warning-700 bg-warning-50 ring-warning-600/20',
-        'delete', 'logout', 'version_delete' => 'text-danger-700 bg-danger-50 ring-danger-600/20',
+        'login', 'create', 'restore', 'download', 'upload' => 'text-success-700 bg-success-50 ring-success-600/20',
+        'update', 'version_desc_update', 'replace' => 'text-warning-700 bg-warning-50 ring-warning-600/20',
+        'delete', 'logout', 'version_delete', 'forceDelete' => 'text-danger-700 bg-danger-50 ring-danger-600/20',
         default => 'text-primary-700 bg-primary-50 ring-primary-600/20',
     };
 
-    // Logic Label Objek
+    // --- LOGIC PENENTUAN NAMA OBJEK ---
     $objectLabel = '-';
     $isUserObject = false;
-    
-    // 1. Cek properti custom label dulu (biasanya titipan controller)
-    if ($customLabel = $record->getExtraProperty('object_label')) {
-        $objectLabel = $customLabel;
+    $isDeleted = false; // <--- Tambahan variable buat nentuin warna
+
+    // 1. CEK SNAPSHOT (Prioritas Utama untuk Data Terhapus)
+    $snapshot = data_get($p, 'snapshot_name');
+
+    if (!empty($snapshot)) {
+        $objectLabel = $snapshot;
+        $isDeleted = true; // Tandai sebagai terhapus
     } 
-    // 2. Jika Subject adalah User
+    // 2. Cek Atribut Lama (Backup)
+    elseif ($name = data_get($p, 'attributes.nama') ?? data_get($p, 'old.nama')) {
+        $objectLabel = $name;
+        $isDeleted = true; // Asumsikan terhapus kalau snapshot gak ada tapi old data ada
+    }
+    // 3. Cek User
     elseif ($record->subject_type === \App\Models\User::class && $record->subject) {
-        $objectLabel = $record->subject->name . ' #' . ($record->subject->department ?? '-');
+        $objectLabel = $record->subject->name;
         $isUserObject = true;
-    } 
-    // 3. (BARU) Cek Function Model (Ini yang memanggil Part Name dari Model Regular)
+    }
+    // 4. Cek Data Realtime (Masih Ada di DB)
     elseif ($record->subject && method_exists($record->subject, 'getActivityDisplayName')) {
         $objectLabel = $record->subject->getActivityDisplayName();
     }
-    // 4. Default Fallback
-    elseif ($record->subject_type) {
-        $objectLabel = class_basename($record->subject_type) . ' #' . $record->subject_id;
+    // 5. Terakhir: Tampilkan ID
+    else {
+        $className = class_basename($record->subject_type ?? 'Item');
+        $cleanName = str_replace('Imm', '', $className); 
+        $objectLabel = $cleanName . ' #' . ($record->subject_id ?? '?');
     }
-@endphp 
+@endphp
 
 <div class="space-y-6">
 
@@ -40,9 +51,9 @@
             @php
                 $icon = match($record->event) {
                     'login', 'logout' => 'heroicon-m-arrow-right-on-rectangle',
-                    'delete' => 'heroicon-m-trash',
-                    'update' => 'heroicon-m-pencil-square',
-                    'create' => 'heroicon-m-plus-circle',
+                    'delete', 'forceDelete' => 'heroicon-m-trash',
+                    'update', 'replace' => 'heroicon-m-pencil-square',
+                    'create', 'upload', 'restore' => 'heroicon-m-plus-circle',
                     default => 'heroicon-m-information-circle',
                 };
             @endphp
@@ -51,7 +62,7 @@
                 class="h-5 w-5 text-gray-400" 
             />
             <span class="text-sm font-medium text-gray-500 dark:text-gray-400">
-                {{ $record->created_at->timezone(auth()->user()->timezone ?? config('app.timezone','Asia/Jakarta'))->format('d F Y, H:i') }}
+                {{ $record->created_at->timezone(auth()->user()->timezone ?? config('app.timezone','Asia/Jakarta'))->format('d F Y, H:i:s') }}
             </span>
         </div>
         <span class="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset {{ $eventColor }}">
@@ -62,48 +73,50 @@
     {{-- GRID INFO UTAMA --}}
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         
-        {{-- 1. Pelaku (Causer) - UPDATED --}}
+        {{-- 1. Pelaku (Causer) --}}
         <div class="bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border border-gray-100 dark:border-gray-800">
             <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Pelaku (User)</span>
             <div class="mt-1 flex items-center gap-2">
-                <div class="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600">
+                <div class="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600 uppercase">
                     {{ substr(optional($record->causer)->name ?? 'S', 0, 1) }}
                 </div>
                 <div class="text-sm">
                     <p class="font-medium text-gray-900 dark:text-white">
-                        {{ optional($record->causer)->name ?? 'System / Tidak Diketahui' }}
+                        {{ optional($record->causer)->name ?? 'System / Scheduler' }}
                     </p>
-                    {{-- Ganti ID menjadi Departemen --}}
                     <p class="text-xs text-gray-500">
-                        Dept: {{ optional($record->causer)->department ?? '-' }}
+                        {{ optional($record->causer)->department ? 'Dept: ' . optional($record->causer)->department : 'System' }}
                     </p>
                 </div>
             </div>
         </div>
 
-        {{-- 2. Objek yang dimanipulasi --}}
+        {{-- 2. Objek yang dimanipulasi (YANG KITA PERBAIKI) --}}
         <div class="bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border border-gray-100 dark:border-gray-800">
             <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Objek</span>
             <div class="mt-1">
-                <p class="text-sm font-medium {{ $isUserObject ? 'text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-white' }}">
+                {{-- Logic Styling: Kalau isDeleted = Merah & Coret. Kalau User = Biru. Default = Hitam --}}
+                <p class="text-sm font-medium {{ $isDeleted ? 'text-red-600 line-through decoration-red-400' : ($isUserObject ? 'text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-white') }}">
                     {{ $objectLabel }}
                 </p>
                 <p class="text-xs text-gray-500 truncate" title="{{ $record->subject_type }}">
-                    Type: {{ class_basename($record->subject_type) }}
+                    Type: {{ class_basename($record->subject_type ?? 'General Log') }}
                 </p>
             </div>
         </div>
     </div>
 
     {{-- DESKRIPSI --}}
+    @if($record->description)
     <div>
         <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-1">Deskripsi</span>
         <div class="text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md p-3">
             {{ $record->description }}
         </div>
     </div>
+    @endif
 
-    {{-- PERUBAHAN DATA (DIFF) - TAMPILAN TABEL GRID TEGAS --}}
+    {{-- PERUBAHAN DATA (DIFF) --}}
     @php
         $new = $p['attributes'] ?? $p['new'] ?? [];
         $old = $p['old'] ?? [];
@@ -114,6 +127,7 @@
             'uuid', 'user_id', 'team_id', 'model_type', 'model_id',
             'dokumen_src', 'thumbnail', 'is_public', 
             'dokumen_src_uploaded_at', 'kode_berkas_ci',
+            'snapshot_name', 'object_label', 'ip', 'user_agent', 'url' 
         ];
     @endphp
 
@@ -152,7 +166,7 @@
                                 {{-- Kolom Nilai Lama (Jika Update) --}}
                                 @if(!empty($old))
                                     <td class="px-4 py-2 text-red-600 border-r border-gray-200 bg-red-50/20 text-xs font-mono break-all">
-                                        {{ $old[$key] ?? '-' }}
+                                        {{ is_array($old[$key] ?? '') ? json_encode($old[$key] ?? '') : ($old[$key] ?? '-') }}
                                     </td>
                                 @endif
 
@@ -163,7 +177,7 @@
                                             {{ $value ? 'Yes' : 'No' }}
                                         </span>
 
-                                    {{-- PERBAIKAN: Handle jika datanya Array (seperti keywords) --}}
+                                    {{-- Handle Array (seperti keywords) --}}
                                     @elseif(is_array($value))
                                         <div class="flex flex-wrap gap-1">
                                             @forelse($value as $item)
@@ -175,11 +189,11 @@
                                             @endforelse
                                         </div>
 
-                                    {{-- Handle File / Path Panjang --}}
-                                    @elseif(is_string($value) && (str_contains($key, 'dokumen') || str_contains($value, 'tmp/') || str_contains($value, '/')))
+                                    {{-- Handle File Path --}}
+                                    @elseif(is_string($value) && (str_contains($key, 'file') || str_contains($value, 'tmp/') || str_contains($value, '/')))
                                         <div class="flex flex-col gap-1">
                                             <span class="text-blue-600 font-medium flex items-center gap-1">
-                                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                                                <x-filament::icon icon="heroicon-m-document" class="w-4 h-4"/>
                                                 {{ basename($value) }}
                                             </span>
                                             <span class="text-[10px] text-gray-400 font-mono truncate max-w-xs" title="{{ $value }}">
@@ -187,7 +201,6 @@
                                             </span>
                                         </div>
 
-                                    {{-- Default String/Number --}}
                                     @else
                                         {{ $value }}
                                     @endif
@@ -200,30 +213,23 @@
         </div>
     @endif
 
-    {{-- FOOTER: INFORMASI TEKNIS (Collapsible / Kecil) --}}
+    {{-- FOOTER: INFORMASI TEKNIS --}}
     <div class="border-t pt-4 border-gray-200 dark:border-gray-700 text-xs text-gray-500 space-y-1">
         <div class="flex gap-2">
             <span class="font-semibold w-12 shrink-0">IP:</span>
             <span class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">{{ data_get($p,'ip') ?? '-' }}</span>
         </div>
         
-        @if ($route = data_get($p,'route'))
-        <div class="flex gap-2">
-            <span class="font-semibold w-12 shrink-0">Route:</span>
-            <span class="truncate font-mono text-gray-400">{{ $route }}</span>
-        </div>
-        @endif
-
         @if ($url = data_get($p,'url'))
         <div class="flex gap-2">
             <span class="font-semibold w-12 shrink-0">URL:</span>
-            <a href="{{ $url }}" target="_blank" class="truncate text-primary-500 hover:underline">{{ $url }}</a>
+            <a href="{{ $url }}" target="_blank" class="truncate text-primary-500 hover:underline max-w-md block">{{ $url }}</a>
         </div>
         @endif
 
         <div class="flex gap-2 mt-2">
             <span class="font-semibold w-12 shrink-0">Agent:</span>
-            <span class="text-gray-400 italic">{{ data_get($p,'user_agent') }}</span>
+            <span class="text-gray-400 italic truncate max-w-md block" title="{{ data_get($p,'user_agent') }}">{{ data_get($p,'user_agent') }}</span>
         </div>
     </div>
 

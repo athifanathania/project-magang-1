@@ -8,49 +8,59 @@ use Illuminate\Validation\ValidationException;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
-use App\Models\Concerns\HumanReadableActivity;
+use Spatie\Activitylog\Contracts\Activity;
+// use App\Models\Concerns\HumanReadableActivity; // Opsional jika bentrok, tapi aman di-keep
 
 class Lampiran extends Model
 {
-    use HasFactory, LogsActivity, HumanReadableActivity;
+    use HasFactory, LogsActivity; 
+    
+    protected $guarded = [];
 
-    public function getActivityDisplayName(): ?string
+    public function getActivityDisplayName(): string
     {
-        $label = $this->nama ?? "Lampiran #{$this->id}";
+        $label = $this->nama; 
 
-        if ($this->regular_id) {
-            return "Regular: {$label}"; // Output: "Regular: Nama File"
+        if (empty($label)) {
+            $label = 'Tanpa Nama';
         }
 
-        if ($this->berkas_id) {
-            return "Event: {$label}";   // Output: "Event: Nama File"
-        }
+        $jenis = 'Lampiran';
+        if ($this->regular_id) $jenis = 'Lampiran Regular';
+        if ($this->berkas_id)  $jenis = 'Lampiran Event';
 
-        return $label;
+        return "{$jenis}: {$label}";
     }
 
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
             ->useLogName('web')
-            ->logOnly(['nama','file','keywords','parent_id','berkas_id','regular_id'])
+            ->logOnly(['nama', 'file', 'keywords', 'parent_id', 'berkas_id', 'regular_id'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs()
             ->setDescriptionForEvent(function (string $eventName) {
-                $jenis = '';
-                
-                if (!empty($this->regular_id)) {
-                    $jenis = 'Regular';
-                } 
-                elseif (!empty($this->berkas_id)) {
-                    $jenis = 'Event';
-                }
-
-                return trim("Lampiran {$jenis} {$eventName}");
+                return $this->getActivityDisplayName() . " ({$eventName})";
             });
     }
 
-    protected $guarded = [];
+    public function tapActivity(Activity $activity, string $eventName)
+    {
+        // 1. Ambil nama SAAT INI JUGA (Sebelum terhapus)
+        $snapshotName = $this->getActivityDisplayName();
+
+        // 2. Ambil properti yang sudah ada (biar gak ketimpa)
+        $properties = $activity->properties->all();
+
+        // 3. Masukkan data tambahan
+        $properties['snapshot_name'] = $snapshotName; // <--- INI KUNCINYA
+        $properties['ip']            = request()->ip();
+        $properties['user_agent']    = substr((string) request()->userAgent(), 0, 500);
+        $properties['url']           = request()->fullUrl();
+
+        // 4. Simpan balik
+        $activity->properties = collect($properties);
+    }
 
     public function berkas()  { return $this->belongsTo(\App\Models\Berkas::class); }
     public function regular() { return $this->belongsTo(\App\Models\Regular::class); }

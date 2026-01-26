@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use App\Models\Concerns\HasBerkasVersions;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
+use Spatie\Activitylog\Contracts\Activity;
 use App\Models\Concerns\HumanReadableActivity;
 
 class Berkas extends Model
@@ -36,6 +37,23 @@ class Berkas extends Model
             ->setDescriptionForEvent(fn (string $e) => "Event {$e}");
     }
 
+    public function tapActivity(Activity $activity, string $eventName)
+    {
+        $currentUrl = request()->fullUrl();
+        if (str_contains($currentUrl, '/livewire/') || str_contains($currentUrl, 'server-memo')) {
+            $referer = request()->header('Referer');
+            if ($referer) {
+                $currentUrl = $referer;
+            }
+        }
+
+        $activity->properties = $activity->properties->merge([
+            'ip'            => request()->ip(),
+            'user_agent'    => substr((string) request()->userAgent(), 0, 500),
+            'url'           => $currentUrl,
+            'snapshot_name' => $this->getActivityDisplayName(), 
+        ]);
+    }
 
     protected $table = 'berkas';
     protected $guarded = [];

@@ -4,9 +4,10 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Database\Eloquent\Model;
 
-// --- IMPORT MODEL (Sama seperti di LogDownload) ---
+// --- IMPORT MODEL ---
 use App\Models\Berkas;
 use App\Models\Regular;
 use App\Models\Lampiran;
@@ -23,74 +24,54 @@ class LogPageView
     {
         $response = $next($request);
 
-        // 1. Filter: Abaikan asset, debugbar, dll
-        if ($request->is(['_debugbar/*','telescope*','horizon*','storage/*','livewire/*','log-viewer*'])) {
+        // 1. Filter: Abaikan asset, debugbar, livewire internal, dll
+        if ($request->is(['_debugbar/*','telescope*','horizon*','storage/*','livewire/*','log-viewer*','filament/*'])) {
             return $response;
         }
 
-        // 2. Filter: Hanya method GET (view) dan bukan AJAX
-        if ($request->method() === 'GET' && !$request->ajax()) {
+        // 2. Filter: Hanya method GET (view), bukan AJAX, dan User BELUM Login (Guest)
+        if (!Auth::check() && $request->method() === 'GET' && !$request->ajax()) {
 
-            // Siapkan Log
+            // Siapkan Log Dasar
             $activity = activity()
-                ->causedBy($request->user())
                 ->event('view')
                 ->withProperties([
-                    'route'      => optional($request->route())->getName(),
-                    'url'        => $request->fullUrl(),
-                    'method'     => $request->method(),
                     'ip'         => $request->ip(),
                     'user_agent' => substr((string) $request->userAgent(), 0, 500),
+                    'url'        => $request->fullUrl(),
                 ]);
 
-            // --- BAGIAN DETEKSI OBJEK (DIPERBAIKI) ---
+            // --- 3. LOGIKA DETEKSI OBJEK (SMART DETECTION) ---
             $subject = null;
             $routeParams = $request->route() ? $request->route()->parameters() : [];
 
-            // CARA A: Cek apakah Controller sudah mengirim Model asli (Model Binding)
-            foreach ($routeParams as $param) {
-                if ($param instanceof Model) {
-                    $subject = $param;
-                    break;
-                }
+            $id = $routeParams['record'] ?? $routeParams['id'] ?? null;
+            
+            $type = $request->segment(2); 
+
+            if ($id && $type) {
+                $subject = match ($type) {
+                    'imm-manual-mutu'       => ImmManualMutu::find($id),
+                    'imm-prosedur'          => ImmProsedur::find($id),
+                    'imm-instruksi-standar' => ImmInstruksiStandar::find($id),
+                    'imm-formulir'          => ImmFormulir::find($id),
+                    'imm-audit-internal'    => ImmAuditInternal::find($id),
+                    'imm-lampiran'          => ImmLampiran::find($id),
+                    
+                    'regular'               => Regular::find($id),
+                    'berkas'                => Berkas::find($id),
+                    'lampiran'              => Lampiran::find($id),
+
+                    default => null,
+                };
             }
 
-            // CARA B: Jika CARA A gagal, kita cari manual berdasarkan ID dan Type (seperti LogDownload)
-            if (! $subject) {
-                // Coba cari parameter 'id' atau 'record_id'
-                $id = $routeParams['id'] ?? $routeParams['record_id'] ?? null;
-                
-                // Coba cari parameter 'type'. Jika tidak ada di parameter, coba cek segmen URL.
-                $type = $routeParams['type'] ?? $request->segment(2) ?? ''; 
-                // Logika $request->segment(2) berasumsi URL-nya seperti: /admin/imm-manual-mutu/10
-
-                if ($id) {
-                    $subject = match ($type) {
-                        // Mapping Dokumen IMM
-                        'imm-manual-mutu'       => ImmManualMutu::find($id),
-                        'imm-prosedur'          => ImmProsedur::find($id),
-                        'imm-instruksi-standar' => ImmInstruksiStandar::find($id),
-                        'imm-formulir'          => ImmFormulir::find($id),
-                        'imm-audit-internal'    => ImmAuditInternal::find($id),
-                        'imm-lampiran'          => ImmLampiran::find($id),
-                        
-                        // Mapping Dokumen Lain
-                        'berkas'                => Berkas::find($id),
-                        'lampiran'              => Lampiran::find($id),
-                        'regular'               => Regular::find($id),
-
-                        default => null,
-                    };
-                }
-            }
-
-            // Jika ketemu (baik dari Cara A atau Cara B), simpan ke Log!
             if ($subject) {
                 $activity->performedOn($subject);
+                $activity->log('Melihat Detail Dokumen (Public)');
+            } else {
+                $activity->log('Melihat Halaman (Public): ' . $request->path());
             }
-            // --------------------------------------------
-
-            $activity->log('View page');
         }
 
         return $response;

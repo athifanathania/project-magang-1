@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 use App\Models\Concerns\HumanReadableActivity;
+use Spatie\Activitylog\Contracts\Activity; 
 
 class ImmAuditInternal extends Model
 {
@@ -23,13 +24,18 @@ class ImmAuditInternal extends Model
             ->setDescriptionForEvent(fn (string $e) => "Dokumen Audit {$e}");
     }
 
-    // --- TAMBAHAN: Agar IP & User Agent Terekam ---
+    public function getActivityDisplayName(): string
+    {
+        return "Audit Internal: {$this->departemen} {$this->semester} {$this->tahun}";
+    }
+
     public function tapActivity(\Spatie\Activitylog\Contracts\Activity $activity, string $eventName)
     {
         $activity->properties = $activity->properties->merge([
-            'ip' => request()->ip(),
-            'user_agent' => request()->userAgent(),
-            'url' => request()->header('Referer') ?? request()->fullUrl(),
+            'ip'            => request()->ip(),
+            'user_agent'    => request()->userAgent(),
+            'url'           => request()->header('Referer') ?? request()->fullUrl(),
+            'snapshot_name' => $this->getActivityDisplayName(),
         ]);
     }
 

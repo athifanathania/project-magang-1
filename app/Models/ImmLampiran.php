@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\{BelongsTo, HasMany, MorphTo};
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
-use Spatie\Activitylog\Models\Activity;
+use Spatie\Activitylog\Contracts\Activity; 
 use App\Models\Concerns\HumanReadableActivity;
 use Illuminate\Support\Str;
 
@@ -23,18 +23,13 @@ class ImmLampiran extends Model
         return Str::headline($cleanName);
     }
 
-    // --- PERUBAHAN UTAMA DI SINI ---
-    // Fungsi ini yang menentukan apa yang tampil di kolom "Objek"
     public function getActivityDisplayName(): ?string
     {
-        // 1. Ambil nama dasarnya (misal: "coba aja")
-        $basicName = $this->nama ?? basename($this->file) ?? "Lampiran #{$this->id}";
+        $fileName  = $this->file ? basename($this->file) : null;
+        $basicName = $this->nama ?? $fileName ?? "Lampiran #{$this->id}";
         
-        // 2. Ambil jenis induknya (misal: "Manual Mutu")
         $parentLabel = $this->getParentLabel();
-
-        // 3. Gabungkan jadi: "Manual Mutu: coba aja"
-        // (Pengecualian jika parentnya 'Lampiran' atau kosong, tampilkan nama saja)
+        
         if ($parentLabel === 'Lampiran' || empty($parentLabel)) {
             return $basicName;
         }
@@ -53,7 +48,6 @@ class ImmLampiran extends Model
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs()
             ->setDescriptionForEvent(function (string $event) {
-                // Description: "Lampiran Imm Manual Mutu updated"
                 $parent = $this->getParentLabel(); 
                 return "Lampiran Imm {$parent} {$event}"; 
             });
@@ -69,29 +63,13 @@ class ImmLampiran extends Model
 
         $props = collect($activity->properties ?? []);
         $props = $props->merge([
-            'ip' => request()->ip(),
-            'user_agent' => request()->userAgent(),
-            'url' => request()->header('Referer') ?? request()->fullUrl(),
+            'ip'            => request()->ip(),
+            'user_agent'    => request()->userAgent(),
+            'url'           => request()->header('Referer') ?? request()->fullUrl(),
         ]);
 
-        // 2. Logic Label (Disederhanakan)
-        // Karena getActivityDisplayName() sekarang sudah mengandung "Manual Mutu: Nama",
-        // Kita tinggal panggil saja, tidak perlu digabung manual lagi agar tidak double.
         $label = $this->getActivityDisplayName();
-
-        // Pengecualian Khusus Audit Internal
-        if ($activity->subject_type === \App\Models\ImmAuditInternal::class) {
-            $parentName = null;
-            try {
-                if ($this->documentable) {
-                    $parentName = $this->documentable->nama ?? $this->documentable->nama_dokumen;
-                }
-            } catch (\Throwable $e) {}
-
-            $label = "Audit Internal: " . ($parentName ?? $activity->subject_id);
-        }
-
-        $activity->properties = $props->put('object_label', $label);
+        $activity->properties = $props->put('snapshot_name', $label);
     }
 
     protected ?string $oldFilePath = null;
