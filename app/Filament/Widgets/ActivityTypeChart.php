@@ -9,7 +9,7 @@ use Spatie\Activitylog\Models\Activity;
 class ActivityTypeChart extends ChartWidget
 {
     protected static ?string $heading = 'Komposisi Event Sistem';
-    protected static ?int $sort = 4;
+    protected static ?int $sort = 15;
     protected static ?string $maxHeight = '300px';
 
     public static function canView(): bool

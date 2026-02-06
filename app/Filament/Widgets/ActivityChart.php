@@ -10,7 +10,7 @@ use Spatie\Activitylog\Models\Activity;
 class ActivityChart extends ChartWidget
 {
     protected static ?string $heading = 'Tren Aktivitas Pengguna (7 Hari Terakhir)';
-    protected static ?int $sort = 5;
+    protected static ?int $sort = 13;
     
     protected int | string | array $columnSpan = 'full'; 
 

@@ -41,11 +41,16 @@ class UserResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(function (\Illuminate\Database\Eloquent\Builder $query) {
+                return $query
+                    ->orderBy('department', 'asc') 
+                    ->orderBy('name', 'asc');      
+            })
             ->columns([
                 Tables\Columns\TextColumn::make('name')
                     ->label('Nama')->searchable()->sortable(),
 
-                Tables\Columns\TextColumn::make('email')->searchable(),
+                Tables\Columns\TextColumn::make('email')->searchable()->label('Email Perusahaan'),
 
                 Tables\Columns\TextColumn::make('department')
                     ->label('Departemen')
@@ -107,7 +112,16 @@ class UserResource extends Resource
                 ->label('Nama')->required()->maxLength(255),
 
             Forms\Components\TextInput::make('email')
-                ->email()->required()->maxLength(255)->unique(ignoreRecord: true),
+                ->label('Email Perusahaan')
+                ->email()
+                ->required()
+                ->maxLength(255)
+                ->unique(ignoreRecord: true)
+                ->rule('ends_with:@indomatsumoto.com') 
+                ->helperText('Wajib menggunakan email perusahaan (@indomatsumoto.com)')
+                ->validationMessages([
+                    'ends_with' => 'Email harus menggunakan domain @indomatsumoto.com',
+                ]),
 
             Forms\Components\Select::make('department')
                 ->label('Departemen')

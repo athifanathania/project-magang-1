@@ -20,6 +20,12 @@ class Dashboard extends BaseDashboard
             'admin' => [
                 \App\Filament\Widgets\AdminWelcome::class,
                 \App\Filament\Widgets\StatsOverview::class,
+                \App\Filament\Widgets\RegularDocumentTable::class,
+                \App\Filament\Widgets\EventDocumentTable::class,
+                \App\Filament\Widgets\ManualMutuDocumentTable::class,
+                \App\Filament\Widgets\ProsedurDocumentTable::class,
+                \App\Filament\Widgets\InstrukturStandarDocumentTable::class,
+                \App\Filament\Widgets\FormulirDocumentTable::class,
                 \App\Filament\Widgets\DocumentRatioChart::class,
                 \App\Filament\Widgets\ActivityTypeChart::class,
                 \App\Filament\Widgets\ActivityChart::class,

@@ -9,7 +9,7 @@ use App\Models\Berkas;
 class DocumentRatioChart extends ChartWidget
 {
     protected static ?string $heading = 'Perbandingan Jumlah Dokumen Event dan Regular';
-    protected static ?int $sort = 3; 
+    protected static ?int $sort = 10; 
     protected static ?string $maxHeight = '300px';
 
     protected function getData(): array

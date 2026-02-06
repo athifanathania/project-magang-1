@@ -9,13 +9,14 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\Contracts\Activity;
-// use App\Models\Concerns\HumanReadableActivity; // Opsional jika bentrok, tapi aman di-keep
 
 class Lampiran extends Model
 {
     use HasFactory, LogsActivity; 
     
     protected $guarded = [];
+
+    // --- ACTIVITY LOG CONFIGURATION ---
 
     public function getActivityDisplayName(): string
     {
@@ -53,7 +54,7 @@ class Lampiran extends Model
         $properties = $activity->properties->all();
 
         // 3. Masukkan data tambahan
-        $properties['snapshot_name'] = $snapshotName; // <--- INI KUNCINYA
+        $properties['snapshot_name'] = $snapshotName; 
         $properties['ip']            = request()->ip();
         $properties['user_agent']    = substr((string) request()->userAgent(), 0, 500);
         $properties['url']           = request()->fullUrl();
@@ -62,14 +63,33 @@ class Lampiran extends Model
         $activity->properties = collect($properties);
     }
 
+    // --- RELATIONSHIPS ---
+
     public function berkas()  { return $this->belongsTo(\App\Models\Berkas::class); }
     public function regular() { return $this->belongsTo(\App\Models\Regular::class); }
+
+    public function parent()
+    {
+        return $this->belongsTo(self::class, 'parent_id');
+    }
+
+    public function children()
+    {
+        return $this->hasMany(self::class, 'parent_id')->orderBy('id');
+    }
+
+    public function childrenRecursive()
+    {
+        return $this->children()->with('childrenRecursive');
+    }
 
     /** Owner dinamis (Berkas atau Regular) */
     public function owner(): ?\Illuminate\Database\Eloquent\Model
     {
         return $this->berkas ?? $this->regular ?? null;
     }
+
+    // --- HELPERS & SCOPES ---
 
     /** URL media dinamis untuk tombol “Buka” */
     public function mediaUrl(): ?string
@@ -91,26 +111,24 @@ class Lampiran extends Model
         return null;
     }
 
-    public function parent()
-    {
-        return $this->belongsTo(self::class, 'parent_id');
-    }
-
-    public function children()
-    {
-        return $this->hasMany(self::class, 'parent_id')->orderBy('id');
-    }
-
-    public function childrenRecursive()
-    {
-        return $this->children()->with('childrenRecursive');
-    }
-
     /** Scope bantu untuk root nodes */
     public function scopeRoot($q)
     {
         return $q->whereNull('parent_id');
     }
+
+    /** Rekursif: set berkas_id semua turunan = $newId */
+    public function updateDescendantsBerkasId($newId): void
+    {
+        $this->children()->update(['berkas_id' => $newId]);
+
+        // lanjutkan ke cucu-cicit
+        foreach ($this->children as $child) {
+            $child->updateDescendantsBerkasId($newId);
+        }
+    }
+
+    // --- BOOTED & MODEL EVENTS ---
 
     protected ?string $oldFilePath = null;
 
@@ -118,7 +136,7 @@ class Lampiran extends Model
     { 
         // Pastikan anak selalu mewarisi berkas_id parent
         static::saving(function (Lampiran $m) {
-            // Cegah parent menjadi turunan dari $m (mencegah siklus)
+            // Cegah parent menjadi turunan dari $m (mencegah siklus infinite loop)
             if ($m->parent_id && $m->id) {
                 $p = static::find($m->parent_id);
                 while ($p) {
@@ -130,6 +148,8 @@ class Lampiran extends Model
                     $p = $p->parent_id ? static::find($p->parent_id) : null;
                 }
             }
+            
+            // Wariskan ID induk
             if ($m->parent_id) {
                 $p = static::select('berkas_id','regular_id')->find($m->parent_id);
                 if ($p) {
@@ -137,6 +157,7 @@ class Lampiran extends Model
                     $m->regular_id = $p->regular_id;
                 }
             }
+
             // Validasi eksklusif satu owner (persis satu harus terisi)
             $hasB = filled($m->berkas_id);
             $hasR = filled($m->regular_id);
@@ -178,22 +199,11 @@ class Lampiran extends Model
     }
 
     protected $casts = [
-        'file_versions' => 'array',   
-        'file_src_versions'    => 'array',
-        // 'keywords' => 'array', 
+        'file_versions'     => 'array',   
+        'file_src_versions' => 'array',
     ];
 
-
-    /** Rekursif: set berkas_id semua turunan = $newId */
-    public function updateDescendantsBerkasId($newId): void
-    {
-        $this->children()->update(['berkas_id' => $newId]);
-
-        // lanjutkan ke cucu-cicit
-        foreach ($this->children as $child) {
-            $child->updateDescendantsBerkasId($newId);
-        }
-    }
+    // --- ACCESSORS & MUTATORS ---
 
     protected function keywords(): Attribute
     {
@@ -232,6 +242,8 @@ class Lampiran extends Model
             return json_encode($sanitize($arr), JSON_UNESCAPED_UNICODE);
         });
     }
+
+    // --- FILE VERSIONING LOGIC (MANUAL) ---
 
     public function appendFileVersion(?string $oldPath, ?int $userId = null): void
     {
@@ -274,7 +286,7 @@ class Lampiran extends Model
         catch (\Throwable) {}
 
         $versions[] = [
-            'file_path'        => $newPath,
+            'file_path'   => $newPath,
             'filename'    => basename($oldPath),
             'size'        => $disk->size($newPath),
             'ext'         => pathinfo($newPath, PATHINFO_EXTENSION),

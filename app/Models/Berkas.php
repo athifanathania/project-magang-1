@@ -14,6 +14,49 @@ class Berkas extends Model
 {
     use HasFactory, HasBerkasVersions, LogsActivity, HumanReadableActivity;
 
+    protected $table = 'berkas';
+    protected $guarded = [];
+    protected $attributes = ['is_public' => true];
+
+    protected $casts = [
+        'keywords'                => 'array',
+        'is_public'               => 'boolean',
+        'dokumen_versions'        => 'array',
+        'dokumen_src_versions'    => 'array',
+        'dokumen_uploaded_at'     => 'datetime',
+        'dokumen_src_uploaded_at' => 'datetime',
+    ];
+
+    /* ===========================
+     |  RELATIONS
+     |===========================*/
+    public function lampirans()
+    {
+        return $this->hasMany(Lampiran::class);
+    }
+
+    public function rootLampirans()
+    {
+        return $this->hasMany(\App\Models\Lampiran::class)
+            ->whereNull('parent_id')
+            ->orderBy('id'); // sesuaikan jika perlu
+    }
+
+    public function rootLampiransRecursive()
+    {
+        return $this->rootLampirans()->with('childrenRecursive');
+    }
+
+    /* ===========================
+     |  SCOPES
+     |===========================*/
+    public function scopePublic($query)
+    {
+        return $query->where('is_public', true);
+    }
+
+    // --- ACTIVITY LOG CONFIGURATION ---
+
     public function getActivityDisplayName(): ?string
     {
         $label = $this->nama ?? 'Event Tanpa Nama'; 
@@ -53,46 +96,5 @@ class Berkas extends Model
             'url'           => $currentUrl,
             'snapshot_name' => $this->getActivityDisplayName(), 
         ]);
-    }
-
-    protected $table = 'berkas';
-    protected $guarded = [];
-    protected $attributes = ['is_public' => true];
-
-    protected $casts = [
-        'keywords'               => 'array',
-        'is_public'              => 'boolean',
-        'dokumen_versions'       => 'array',
-        'dokumen_src_versions'   => 'array',
-        'dokumen_uploaded_at'    => 'datetime',
-        'dokumen_src_uploaded_at'=> 'datetime',
-    ];
-
-    /* ===========================
-     |  RELATIONS
-     |===========================*/
-    public function lampirans()
-    {
-        return $this->hasMany(Lampiran::class);
-    }
-
-    public function rootLampirans()
-    {
-        return $this->hasMany(\App\Models\Lampiran::class)
-            ->whereNull('parent_id')
-            ->orderBy('id'); // sesuaikan jika perlu
-    }
-
-    public function rootLampiransRecursive()
-    {
-        return $this->rootLampirans()->with('childrenRecursive');
-    }
-
-    /* ===========================
-     |  SCOPES (opsional membantu)
-     |===========================*/
-    public function scopePublic($query)
-    {
-        return $query->where('is_public', true);
     }
 }
