@@ -42,7 +42,7 @@ class ImmLampiran extends Model
         return LogOptions::defaults()
             ->useLogName('web')
             ->logOnly([
-                'nama','file','keywords','parent_id',
+                'nama','file','keywords','parent_id','file_staf',
                 'documentable_type','documentable_id','deadline_at',
             ])
             ->logOnlyDirty()
@@ -190,14 +190,18 @@ class ImmLampiran extends Model
     {
         $raw = $this->getAttribute('file_versions');
         if ($raw instanceof \Illuminate\Support\Collection) $raw = $raw->all();
-        elseif (is_string($raw)) { $dec = json_decode($raw, true); $raw = is_array($dec) ? $dec : []; }
+        elseif (is_string($raw)) { 
+            $dec = json_decode($raw, true); 
+            $raw = is_array($dec) ? $dec : []; 
+        }
         elseif (!is_array($raw)) { $raw = []; }
 
         $versions = [];
         $meta     = [];
         foreach ($raw as $k => $v) {
-            $isNumeric = is_int($k) || ctype_digit((string)$k);
-            if ($isNumeric) {
+            // Cek apakah key adalah angka (0, 1, 2...)
+            if (is_int($k) || ctype_digit((string)$k)) {
+                // Pastikan isinya valid array file
                 if (is_array($v) && (isset($v['file_path']) || isset($v['path']) || isset($v['filename']))) {
                     $versions[] = $v;
                 }
@@ -206,20 +210,31 @@ class ImmLampiran extends Model
             }
         }
 
-        if ($index < 0 || $index >= count($versions)) return false;
-
-        $disk = \Storage::disk('private');
-        $v    = $versions[$index] ?? null;
-        if (is_array($v) && !empty($v['file_path']) && $disk->exists($v['file_path'])) {
-            $disk->delete($v['file_path']);
+        // Cek apakah index yang mau dihapus ada
+        if (! isset($versions[$index])) {
+            return false;
         }
-        array_splice($versions, $index, 1);
 
-        $out = array_values($versions);
-        foreach ($meta as $k => $val) { $out[$k] = $val; }
+        // Hapus file fisik di storage jika ada
+        $pathToRemove = $versions[$index]['file_path'] ?? $versions[$index]['path'] ?? null;
+        if ($pathToRemove && \Storage::disk('private')->exists($pathToRemove)) {
+            \Storage::disk('private')->delete($pathToRemove);
+        }
+
+        // Hapus dari array
+        unset($versions[$index]);
+
+        // Re-index array (supaya urutan kunci kembali 0, 1, 2...)
+        $versions = array_values($versions);
+
+        // Gabungkan kembali dengan meta
+        $out = $versions;
+        foreach ($meta as $k => $v) {
+            $out[$k] = $v;
+        }
 
         $this->file_versions = $out;
-        $this->saveQuietly();
+        $this->save();
 
         return true;
     }

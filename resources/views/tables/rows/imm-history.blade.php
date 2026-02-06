@@ -128,7 +128,7 @@
                   : ('REV' . str_pad($chronIndex, 2, '0', STR_PAD_LEFT));
             @endphp
 
-            <tr class="odd:bg-white even:bg-gray-50/30 hover:bg-gray-50/70">
+            <tr class="odd:bg-white even:bg-gray-50/30 hover:bg-gray-50/70 group">
               <td class="px-3 py-2 border text-gray-500">{{ $i + 1 }}</td>
 
               <td class="px-3 py-2 border align-top whitespace-normal break-words break-all">
@@ -136,31 +136,41 @@
                   <x-filament::icon icon="heroicon-m-document-text" class="w-4 h-4 text-gray-400 mt-0.5 shrink-0"/>
                   <div class="min-w-0 flex-1">
                     <div class="font-medium text-gray-900 break-words break-all [overflow-wrap:anywhere]">{{ $fileName }}</div>
-                    <span class="inline-flex items-center rounded ring-1 ring-inset px-1 mt-1 {{ $extClass }}" style="font-size:9px;line-height:10px;padding-top:1px;padding-bottom:1px;">
-                      {{ strtoupper($ext ?: 'FILE') }}
-                    </span>
+                    <div class="flex gap-2 mt-1">
+                        <span class="inline-flex items-center rounded ring-1 ring-inset px-1 {{ $extClass }}" style="font-size:9px;line-height:10px;padding-top:1px;padding-bottom:1px;">
+                          {{ strtoupper($ext ?: 'FILE') }}
+                        </span>
+                        @if($isActive)
+                          <span class="inline-flex items-center rounded ring-1 ring-inset px-1 bg-green-50 text-green-700 ring-green-600/20" style="font-size:9px;line-height:10px;">
+                            AKTIF
+                          </span>
+                        @endif
+                    </div>
                   </div>
                 </div>
               </td>
 
               <td class="px-3 py-2 border">{{ $displayRevision }}</td>
-              <td class="px-3 py-2 border break-words">{{ ($v['description'] ?? '') !== '' ? $v['description'] : '-' }}</td>
-              <td class="px-3 py-2 border">{{ $fmtDate($v['uploaded_at'] ?? null) }}</td>
-              <td class="px-3 py-2 border">{{ $fmtDate($v['replaced_at'] ?? null) }}</td>
-              <td class="px-3 py-2 border whitespace-nowrap">{{ $sizeText }}</td>
+              <td class="px-3 py-2 border break-words text-sm">{{ ($v['description'] ?? '') !== '' ? $v['description'] : '-' }}</td>
+              <td class="px-3 py-2 border text-xs whitespace-nowrap">{{ $fmtDate($v['uploaded_at'] ?? null) }}</td>
+              <td class="px-3 py-2 border text-xs whitespace-nowrap">{{ $fmtDate($v['replaced_at'] ?? null) }}</td>
+              <td class="px-3 py-2 border text-xs whitespace-nowrap">{{ $sizeText }}</td>
 
               @if ($showActionsCol)
               <td class="px-3 py-2 border text-center align-middle">
-                <div class="inline-flex items-center justify-center gap-1">
+                <div class="inline-flex items-center justify-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                  
+                  {{-- Tombol DOWNLOAD: Muncul untuk Staf & Admin --}}
                   @if ($canDownload)
                     <a href="{{ route('media.imm.version', ['type'=>$type, 'id'=>$rec->getKey(), 'index'=>$originalIndex]) }}"
-                       class="inline-flex items-center justify-center w-7 h-7 rounded-md hover:bg-gray-100" title="Download">
-                      <x-filament::icon icon="heroicon-m-arrow-down-tray" class="w-4 h-4 text-blue-600"/>
+                      class="inline-flex items-center justify-center w-7 h-7 rounded-md hover:bg-blue-50 text-gray-400 hover:text-blue-600" 
+                      title="Download File">
+                      <x-filament::icon icon="heroicon-m-arrow-down-tray" class="w-4 h-4"/>
                     </a>
                   @endif
 
                   @if ($canEdit)
-                    <button type="button" class="inline-flex items-center justify-center w-7 h-7 rounded-md hover:bg-gray-100"
+                    <button type="button" class="inline-flex items-center justify-center w-7 h-7 rounded-md hover:bg-orange-50 text-gray-400 hover:text-orange-600"
                       title="Edit deskripsi"
                       @click.stop.prevent="
                         editVersion = {
@@ -171,18 +181,18 @@
                         };
                         $dispatch('open-modal', { id: 'edit-imm-doc-version-{{ $rec->getKey() }}' });
                       ">
-                      <x-filament::icon icon="heroicon-m-pencil" class="w-4 h-4 text-gray-600"/>
+                      <x-filament::icon icon="heroicon-m-pencil" class="w-4 h-4"/>
                     </button>
                   @endif
 
                   @if ($canDelete && ! $isActive)
-                    <button type="button" class="inline-flex items-center justify-center w-7 h-7 rounded-md hover:bg-gray-100"
+                    <button type="button" class="inline-flex items-center justify-center w-7 h-7 rounded-md hover:bg-red-50 text-gray-400 hover:text-red-600"
                       title="Hapus versi"
                       @click.stop.prevent="
                         toDelete = { id: {{ $rec->getKey() }}, index: {{ $originalIndex }}, name: @js($fileName) };
                         $dispatch('open-modal', { id: 'confirm-del-imm-doc-ver-{{ $rec->getKey() }}' });
                       ">
-                      <x-filament::icon icon="heroicon-m-trash" class="w-4 h-4 text-red-600"/>
+                      <x-filament::icon icon="heroicon-m-trash" class="w-4 h-4"/>
                     </button>
                   @endif
                 </div>

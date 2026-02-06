@@ -3,10 +3,14 @@
     use Carbon\Carbon;
 
     $user = Filament::auth()->user();
-    $name = $user?->name ?? 'Admin';
+    $name = $user?->name ?? 'User';
     
-    // Logic Role Label
+    // 1. Logic Role Label (Untuk Badge di atas) -> Administrator / Editor / Staff
     $roleLabel = $user?->hasRole('Admin') ? 'Administrator' : ($user?->hasRole('Editor') ? 'Editor' : 'Staff');
+
+    // 2. Logic Role Deskripsi (Untuk Teks Paragraf) -> Admin / Editor / Staff
+    // Supaya kalimatnya jadi: "Dashboard Admin" atau "Dashboard Editor"
+    $roleDescription = $user?->hasRole('Admin') ? 'Admin' : ($user?->hasRole('Editor') ? 'Editor' : 'Staff');
     
     // Logic Sapaan Waktu
     $hour = Carbon::now()->hour;
@@ -22,13 +26,12 @@
     {{-- Container Utama --}}
     <div class="relative overflow-hidden rounded-2xl bg-white shadow-md ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10">
         
-        {{-- 1. BACKGROUND GRADASI (Dipertebal supaya "Kelihatan") --}}
-        {{-- Opacity dinaikkan ke 0.15 supaya warnanya keluar --}}
+        {{-- 1. BACKGROUND GRADASI (Opacity 0.15 biar soft tapi kelihatan) --}}
         <div class="absolute inset-0 pointer-events-none" 
              style="background: linear-gradient(110deg, #ffffff 40%, rgba(var(--primary-500), 0.15) 100%);">
         </div>
 
-        {{-- 2. DEKORASI LINGKARAN (Diperbesar & Dipertebal) --}}
+        {{-- 2. DEKORASI LINGKARAN --}}
         <div class="absolute -right-20 -top-20 h-96 w-96 rounded-full pointer-events-none opacity-30"
              style="background: radial-gradient(circle, rgba(var(--primary-600), 0.2) 0%, transparent 70%);">
         </div>
@@ -54,10 +57,10 @@
                 </div>
             </div>
 
-            {{-- BAGIAN TEXT (Full Rata Kiri di Desktop) --}}
+            {{-- BAGIAN TEXT --}}
             <div class="flex-1 text-center md:text-left">
                 
-                {{-- Role & Tanggal --}}
+                {{-- Role Badge & Tanggal --}}
                 <div class="mb-4 flex flex-wrap items-center justify-center gap-3 md:justify-start">
                     <span class="inline-flex items-center rounded-full bg-primary-50 px-3 py-1 text-xs font-bold text-primary-700 ring-1 ring-inset ring-primary-700/10 dark:bg-primary-500/10 dark:text-primary-400 dark:ring-primary-500/20">
                         {{ $roleLabel }}
@@ -67,21 +70,21 @@
                     </span>
                 </div>
 
-                {{-- Sapaan --}}
+                {{-- Sapaan Besar --}}
                 <h2 class="text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-4xl">
                     {{ $greeting }}, <br class="block sm:hidden">
                     <span style="color: rgb(var(--primary-600));">{{ $name }}!</span> 👋
                 </h2>
                 
-                {{-- Deskripsi --}}
+                {{-- Deskripsi DINAMIS --}}
+                {{-- Menggunakan variabel $roleDescription agar teks menyesuaikan login --}}
                 <p class="mt-4 text-base text-gray-500 dark:text-gray-400 leading-relaxed max-w-full md:pr-12">
-                    Selamat datang di <b>Dashboard Admin</b>. Pantau statistik dan kelola dokumen dengan mudah melalui panel ini.
+                    Selamat datang di <b>Dashboard {{ $roleDescription }}</b>. Pantau statistik dan kelola dokumen dengan mudah melalui panel ini.
                 </p>
 
                 <div class="h-4"></div>
-
-                {{-- TOMBOL (Jarak diperlebar jadi mt-12) --}}
-                <div class="mt-16 flex flex-wrap items-center justify-center gap-4 md:justify-start">
+                {{-- TOMBOL (Jarak diperbesar menggunakan mt-12 agar lega) --}}
+                <div class="mt-12 flex flex-wrap items-center justify-center gap-4 md:justify-start">
                     <x-filament::button 
                         tag="a" 
                         href="{{ route('filament.admin.pages.dashboard') }}" 

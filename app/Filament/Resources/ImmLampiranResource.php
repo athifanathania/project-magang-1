@@ -202,10 +202,19 @@ class ImmLampiranResource extends Resource
                         $operation !== 'view'
                     ),
 
-                // File utama: tetap editable
+                // File utama
                 FileUpload::make('file')
-                    ->disk('private')->directory('imm/lampiran')
-                    ->previewable(true)->openable(false)->downloadable(false)
+                    // MODIFIKASI: Label dinamis
+                    ->label(fn (Get $get, ?ImmLampiran $record) => 
+                        str_contains(ltrim((string)($record?->documentable_type ?? $get('documentable_type') ?? request('documentable_type') ?? request('doc_type') ?? ''), '\\'), 'ImmAuditInternal')
+                        ? 'File Record' 
+                        : 'File Record (Admin/Editor)'
+                    )
+                    ->disk('private')
+                    ->directory('imm/lampiran')
+                    ->previewable(true)
+                    ->openable(false)
+                    ->visible(fn () => auth()->user()->hasAnyRole(['Admin', 'Editor']))
                     ->saveUploadedFileUsing(function (\Livewire\Features\SupportFileUploads\TemporaryUploadedFile $file) {
                         $disk = 'private'; $dir = 'imm/lampiran';
                         $orig = $file->getClientOriginalName();
@@ -227,10 +236,37 @@ class ImmLampiranResource extends Resource
                             )
                             ->visible(fn ($record) =>
                                 filled($record?->file)
-                                && (auth()->user()?->hasAnyRole(['Admin','Editor','Staff']) ?? false)
+                                && (auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false)
                             )
                     )
                     ->disabledOn('view'),
+
+                // File Staff - MODIFIKASI VISIBILITY
+                FileUpload::make('file_staf')
+                    ->label('File Download Staf')
+                    ->disk('private')
+                    ->directory('imm/lampiran/staf')
+                    ->previewable(true)
+                    ->openable(true)
+                    ->downloadable(true)
+                    ->rules(['nullable', 'file'])
+                    // MODIFIKASI: Sembunyikan jika tipe dokumen adalah Audit Internal
+                    ->visible(fn (Get $get, ?ImmLampiran $record) => 
+                        ! str_contains(ltrim((string)($record?->documentable_type ?? $get('documentable_type') ?? request('documentable_type') ?? request('doc_type') ?? ''), '\\'), 'ImmAuditInternal')
+                    )
+                    ->disabled(fn (string $operation) => 
+                        $operation === 'view' || (auth()->user()?->hasRole('Staff') ?? false)
+                    )
+                    ->deletable(fn (string $operation) => 
+                        $operation !== 'view' && !(auth()->user()?->hasRole('Staff') ?? false)
+                    )
+                    ->hintAction(
+                        \Filament\Forms\Components\Actions\Action::make('buka_file_staf')
+                            ->label('Buka File')
+                            ->icon('heroicon-m-arrow-top-right-on-square')
+                            ->url(fn ($record) => $record?->file_staf ? route('media.imm.lampiran', ['lampiran' => $record->id, 'type' => 'staf']) : null, shouldOpenInNewTab: true)
+                            ->visible(fn ($record) => filled($record?->file_staf))
+                    ),
 
                 // File asli (Admin saja)
                 FileUpload::make('file_src')
@@ -256,7 +292,6 @@ class ImmLampiranResource extends Resource
                 ]),
         ]);
     }
-
 
     public static function getPages(): array
     {

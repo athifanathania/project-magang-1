@@ -11,12 +11,13 @@ class DownloadSourceController extends Controller
 {
     public function __invoke(Request $request, string $type, int $id)
     {
-        Gate::authorize('download-source');
+        // Gate::authorize('download-source');
 
         $map = [
             'berkas'                => [\App\Models\Berkas::class, 'dokumen_src'],
             'lampiran'              => [\App\Models\Lampiran::class, 'file_src'],
             'imm-lampiran'          => [\App\Models\ImmLampiran::class, 'file_src'],
+            'imm-lampiran-staf'     => [\App\Models\ImmLampiran::class, 'file_staf'],
             'imm-manual-mutu'       => [\App\Models\ImmManualMutu::class, 'file_src'],
             'imm-prosedur'          => [\App\Models\ImmProsedur::class, 'file_src'],
             'imm-instruksi-standar' => [\App\Models\ImmInstruksiStandar::class, 'file_src'],

@@ -136,7 +136,7 @@
 >
   <div class="mt-4">
     <h3 class="text-sm font-semibold">
-      Riwayat file dari lampiran <span class="text-gray-900">"{{ $lampiranName }}"</span>
+      Riwayat file master dari lampiran <span class="text-gray-900">"{{ $lampiranName }}"</span>
     </h3>
 
     <div class="mt-2 rounded-xl ring-1 ring-gray-200 shadow-sm overflow-hidden">

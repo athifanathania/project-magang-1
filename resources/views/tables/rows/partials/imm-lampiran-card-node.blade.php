@@ -13,30 +13,56 @@ $childrenAll = $lampiran->relationLoaded('childrenRecursive')
 $children    = $childrenAll;
 $hasChildren = $childrenAll->isNotEmpty();
 
-// file status
-$filePath = trim((string) ($lampiran->file ?? ''));
-$hasFile  = $filePath !== '';
+// ==========================================
+// 1. DEFINISI USER & PERMISSION
+// ==========================================
+$user = auth()->user();
+$isAdmin = $user?->hasRole('Admin') ?? false;
+$isAdminOrEditor = $user?->hasAnyRole(['Admin','Editor']) ?? false;
+$isStaff = $user?->hasRole('Staff') ?? false;
 
-$type = class_basename($lampiran->documentable_type ?? '');
+// ==========================================
+// 2. LOGIKA FILE
+// ==========================================
+$fileStaf   = trim((string) ($lampiran->file_staf ?? '')); // File Staf
+$fileRecord = trim((string) ($lampiran->file ?? ''));      // File Record (Utama)
+$fileSrc    = trim((string) ($lampiran->file_src ?? ''));  // File Asli (Source)
 
-$openUrl = $hasFile
-    ? route('media.imm.lampiran', ['lampiran' => $lampiran->id])   
-    : null;
+// Variabel $filePath tetap ada untuk kompatibilitas logika ekstensi file di bawah
+$filePath = $fileRecord; 
+
+// Node dianggap punya file jika salah satu ada (untuk indikator warna judul merah/hitam)
+$hasFile  = ($fileStaf !== '') || ($fileRecord !== '');
+
+// URL untuk "Buka" (KHUSUS FILE STAF)
+// Revisi: Tidak ada fallback ke fileRecord. Hanya isi URL jika fileStaf ada.
+$openUrl = null;
+if ($fileStaf !== '') {
+    $openUrl = route('media.imm.lampiran', ['lampiran' => $lampiran->id, 'type' => 'staf']);
+}
 
 $editUrl  = \App\Filament\Resources\ImmLampiranResource::getUrl('edit', ['record' => $lampiran]);
 
-// ===== Cabang punya file? (node sendiri ATAU salah satu keturunan) =====
-$hasFileSelf = ($filePath !== '');
+// ==========================================
+// 3. LOGIKA DOWNLOAD SUMBER (FILE ASLI)
+// ==========================================
+// Revisi: HANYA ADMIN yang boleh download source, dan file source harus ada.
+$canDownloadSource = $isAdmin && ($fileSrc !== '');
+$downloadSrcUrl = route('download.source', ['type' => 'imm-lampiran', 'id' => $lampiran->id]);
 
+// ==========================================
+// 4. FILTER & SEARCH (TIDAK DIUBAH)
+// ==========================================
+$hasFileSelf = $hasFile;
 $hasFileInDesc = function (ImmLampiran $n) use (&$hasFileInDesc): bool {
     $kids = $n->relationLoaded('childrenRecursive')
         ? $n->childrenRecursive
         : $n->children()->with('childrenRecursive')->get();
 
     foreach ($kids as $c) {
-        if (trim((string) ($c->file ?? '')) !== '' || $hasFileInDesc($c)) {
-            return true;
-        }
+        $cStaf   = trim((string) ($c->file_staf ?? ''));
+        $cRecord = trim((string) ($c->file ?? ''));
+        if (($cStaf !== '' || $cRecord !== '') || $hasFileInDesc($c)) return true;
     }
     return false;
 };
@@ -44,7 +70,6 @@ $hasFileInDesc = function (ImmLampiran $n) use (&$hasFileInDesc): bool {
 $branchHasFile       = $hasFileSelf || $hasFileInDesc($lampiran);
 $isCompletelyMissing = ! $branchHasFile;
 
-// keywords
 $toArray = function ($v) {
     if (blank($v)) return [];
     if ($v instanceof \Illuminate\Support\Collection) return $v->all();
@@ -63,12 +88,8 @@ $kw = collect($toArray($lampiran->keywords))
 
 $indent = 'pl-' . min(($level * 4), 16);
 
-// filter
 $filtersState = method_exists($this, 'getTableFiltersForm') ? $this->getTableFiltersForm()->getRawState() : [];
-$terms = collect(data_get($filtersState, 'q.terms', []))
-    ->filter(fn($t)=>is_string($t) && trim($t)!=='')
-    ->map(fn($t)=>mb_strtolower(trim($t)))
-    ->values();
+$terms = collect(data_get($filtersState, 'q.terms', []))->filter(fn($t)=>is_string($t) && trim($t)!=='')->map(fn($t)=>mb_strtolower(trim($t)))->values();
 $modeAll = (bool) data_get($filtersState, 'q.all', false);
 
 $norm = function($v){
@@ -86,24 +107,14 @@ $norm = function($v){
 
 $nodeMatches = function(ImmLampiran $n) use($terms,$modeAll,$norm): bool {
     if ($terms->isEmpty()) return true;
-
-    $hay = collect()
-        ->merge($norm($n->nama ?? ''))
-        ->merge($norm($n->file ?? ''))
-        ->merge($norm($n->keywords ?? ''));
-
+    $hay = collect()->merge($norm($n->nama ?? ''))->merge($norm($n->file ?? ''))->merge($norm($n->keywords ?? ''));
     if ($hay->isEmpty()) return false;
-
-    return $modeAll
-        ? $terms->every(fn ($t) => $hay->contains(fn ($s) => str_contains($s, $t)))
-        : $terms->some(fn ($t) => $hay->contains(fn ($s) => str_contains($s, $t)));
+    return $modeAll ? $terms->every(fn ($t) => $hay->contains(fn ($s) => str_contains($s, $t))) : $terms->some(fn ($t) => $hay->contains(fn ($s) => str_contains($s, $t)));
 };
 
 $branchMatches = function(ImmLampiran $n) use(&$branchMatches,$nodeMatches): bool {
     if ($nodeMatches($n)) return true;
-    $kids = $n->relationLoaded('childrenRecursive')
-        ? $n->childrenRecursive
-        : $n->children()->with('childrenRecursive')->get();
+    $kids = $n->relationLoaded('childrenRecursive') ? $n->childrenRecursive : $n->children()->with('childrenRecursive')->get();
     foreach ($kids as $c) if ($branchMatches($c)) return true;
     return false;
 };
@@ -120,29 +131,17 @@ $createUrl = \App\Filament\Resources\ImmLampiranResource::getUrl('create', [
     'doc_id'    => $lampiran->documentable_id,
 ]);
 
-$canUpdate = auth()->user()?->hasAnyRole(['Admin','Editor']) ?? false;
 $isPublic = optional(Filament::getCurrentPanel())->getId() === 'public';
 $canManageImm = ! $isPublic && (
-    (auth()->user() && method_exists(auth()->user(), 'hasAnyRole') && auth()->user()->hasAnyRole(['Admin','Editor']))
-    || auth()->user()?->can('lampiran.create')
-    || auth()->user()?->can('create', \App\Models\ImmLampiran::class)
+    ($user && method_exists($user, 'hasAnyRole') && $user->hasAnyRole(['Admin','Editor']))
+    || $user?->can('lampiran.create')
+    || $user?->can('create', \App\Models\ImmLampiran::class)
 );
 
-$roleCanDownload = Gate::allows('download-source');      // Admin/Editor/Staff = true; Viewer = false
-$fileSrcPath     = trim((string) ($lampiran->file_src ?? ''));
-$hasFileSrc      = ($fileSrcPath !== '');
+// LOGIKA TOMBOL "BUKA" (User Permission)
+$canOpen = ($isAdminOrEditor || $isStaff);
 
-$ext            = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
-$nonPdfInFile   = $hasFile && $ext !== 'pdf';
-
-$canDownloadActive = $roleCanDownload && ($hasFileSrc || $nonPdfInFile);
-
-$dlDisabledReason = $roleCanDownload ? 'File asli belum diunggah' : 'Khusus Admin/Editor/Staff';
-
-$downloadSrcUrl = route('download.source', ['type' => 'imm-lampiran', 'id' => $lampiran->id]);
-$canOpen = $hasFile && (auth()->user()?->hasAnyRole(['Admin','Editor','Staff']) ?? false);
-
-$canDeleteStrict = auth()->user()?->hasRole('Admin') ?? false; // hanya Admin
+$canDeleteStrict = $user?->hasRole('Admin') ?? false;
 
 @endphp
 
@@ -169,6 +168,7 @@ $canDeleteStrict = auth()->user()?->hasRole('Admin') ?? false; // hanya Admin
 
     <div class="min-w-0 w-full">
       <div class="flex items-center gap-2 flex-wrap">
+        {{-- JUDUL --}}
         <span class="font-semibold break-words {{ $isCompletelyMissing ? 'text-red-600' : 'text-gray-900' }}"
           style="{{ $isCompletelyMissing ? 'color:#dc2626' : '' }}">
           {{ $lampiran->nama ?? 'Tanpa judul' }}
@@ -182,35 +182,32 @@ $canDeleteStrict = auth()->user()?->hasRole('Admin') ?? false; // hanya Admin
         @endif
 
         <div class="ml-auto flex items-center gap-2">
-        @if ($hasFile && $canOpen)
+        {{-- 1. TOMBOL BUKA (MENGARAH KE FILE STAF SAJA) --}}
+        @if (!empty($openUrl) && $canOpen)
           <a href="{{ $openUrl }}" target="_blank" rel="noopener"
             class="text-sm font-medium hover:underline" style="color:#2563eb" @click.stop>
             Buka
           </a>
-        @elseif ($hasFile)
-          <span class="text-sm text-gray-400 cursor-not-allowed" title="Khusus Admin/Editor/Staff">Buka</span>
-        @elseif ($canUpdate)
+        @elseif (!empty($openUrl))
+          <span class="text-sm text-gray-400 cursor-not-allowed" title="Akses terbatas">Buka</span>
+        @elseif ($isAdminOrEditor)
+          {{-- Jika file staf KOSONG, tawarkan Admin/Editor upload --}}
           <a href="{{ $editUrl }}?missingFile=1"
             class="text-sm font-medium hover:underline text-amber-700" @click.stop>
             Tambahkan file
           </a>
         @else
+          {{-- User biasa, file staf kosong = File belum tersedia --}}
           <span class="text-sm text-gray-500">File belum tersedia</span>
         @endif
 
-        {{-- ⬇️ Ikon Unduh File Asli (hanya Admin/Editor/Staff). Viewer: tidak tampil sama sekali --}}
-        @if ($roleCanDownload)
-          @if ($canDownloadActive)
+        {{-- 2. TOMBOL DOWNLOAD SUMBER (HANYA ADMIN & JIKA ADA FILE SOURCE) --}}
+        @if ($canDownloadSource)
             <a href="{{ $downloadSrcUrl }}" target="_blank" rel="noopener"
-              class="text-gray-600 hover:text-gray-900" title="Unduh file asli"
+              class="text-gray-600 hover:text-gray-900" title="Unduh File Asli (Admin Saja)"
               @click.stop>
               <x-filament::icon icon="heroicon-m-arrow-down-tray" class="w-4 h-4" />
             </a>
-          @else
-            <span class="text-gray-300 cursor-not-allowed" title="{{ $dlDisabledReason }}">
-              <x-filament::icon icon="heroicon-m-arrow-down-tray" class="w-4 h-4" />
-            </span>
-          @endif
         @endif
       </div>
 
@@ -220,9 +217,10 @@ $canDeleteStrict = auth()->user()?->hasRole('Admin') ?? false; // hanya Admin
         </a>
         @endif
 
+        {{-- TOMBOL VIEW MODAL --}}
         <a href="#"
             class="text-gray-600 hover:text-gray-900"
-            title="Lihat"
+            title="Lihat Detail"
             @click.stop.prevent="
                 $wire.dispatch('open-imm-lampiran-view', { id: {{ $lampiran->id }} });
                 $dispatch('open-modal', { id: 'view-imm-lampiran-panel-{{ $lampiran->documentable_id }}' });
@@ -230,7 +228,6 @@ $canDeleteStrict = auth()->user()?->hasRole('Admin') ?? false; // hanya Admin
             <x-filament::icon icon="heroicon-m-eye" class="w-4 h-4" />
         </a>
 
-        {{-- Tombol Delete --}}
         @if ($canDeleteStrict)
         <button type="button"
             class="ml-2 text-gray-400 hover:text-red-600"
@@ -241,8 +238,10 @@ $canDeleteStrict = auth()->user()?->hasRole('Admin') ?? false; // hanya Admin
         @endif
       </div>
 
-      @if(!empty($lampiran->file))
-        <div class="text-xs text-gray-500 break-words">{{ $lampiran->file }}</div>
+      {{-- 3. NAMA FILE RECORD (Di bawah judul) --}}
+      {{-- REVISI: Hanya Admin & Editor yang boleh lihat nama file record di tampilan list ini --}}
+      @if(!empty($fileRecord) && $isAdminOrEditor)
+        <div class="text-xs text-gray-500 break-words">{{ $fileRecord }}</div>
       @endif
 
       @if($kw->isNotEmpty())

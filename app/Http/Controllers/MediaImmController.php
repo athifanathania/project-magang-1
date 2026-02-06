@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\File;
-use App\Support\LogDownload;
+use App\Support\LogDownload; // Pastikan file LogDownload ada di folder App/Support
 
 class MediaImmController extends Controller
 {
@@ -49,7 +49,7 @@ class MediaImmController extends Controller
             $response->setLastModified(\Illuminate\Support\Carbon::createFromTimestamp(filemtime($full)));
         }
 
-        // PERHATIKAN: Kita menambahkan prefix 'imm-' di sini
+        // Log untuk file dokumen utama
         LogDownload::make([
             'type'      => 'imm-' . $type, 
             'file'      => basename($path),
@@ -89,5 +89,77 @@ class MediaImmController extends Controller
         ]);
 
         return Storage::disk('private')->download($path, $downloadName);
+    }
+
+    /**
+     * Handle download lampiran dengan LOG + Support Staf File
+     */
+    public function lampiran(Request $req, \App\Models\ImmLampiran $lampiran)
+    {
+        $user = $req->user();
+        
+        // 1. Cek User Login
+        abort_unless($user && $user->hasAnyRole(['Admin','Editor','Staff']), 403);
+
+        // 2. Tentukan File Mana yang Diambil (Staf vs Asli)
+        $type = $req->query('type'); // Deteksi parameter ?type=staf dari Filament
+        $path = null;
+        $categoryLog = 'Lampiran Asli';
+
+        if ($type === 'staf') {
+            // Jika request file staf
+            $path = $lampiran->file_staf;
+            $categoryLog = 'Lampiran (Versi Staf)';
+            if (blank($path)) abort(404, 'File staf belum diupload.');
+        } else {
+            // Jika request file asli (Default)
+            $path = $lampiran->file;
+            if (blank($path)) abort(404, 'File lampiran tidak tersedia.');
+        }
+
+        // 3. Validasi Fisik File
+        $disk = 'private';
+        if (!Storage::disk($disk)->exists($path)) {
+            abort(404, 'File fisik tidak ditemukan.');
+        }
+
+        // 4. Siapkan Header & Nama File (LOGIKA LAMA KAMU)
+        $full = Storage::disk($disk)->path($path);
+        $size = filesize($full);
+        $ext  = strtolower(pathinfo($full, PATHINFO_EXTENSION));
+        $mime = $ext === 'pdf' ? 'application/pdf' : (File::mimeType($full) ?: 'application/octet-stream');
+
+        $baseName   = basename($path);
+        // Trik encoding nama file agar karakter aneh tidak error
+        $asciiName  = preg_replace('/[^\x20-\x7E]/', '_', $baseName);
+        $utf8Name   = rawurlencode($baseName);
+        $disposition = ($ext === 'pdf' ? 'inline' : 'attachment')
+            . '; filename="'.$asciiName.'"'
+            . "; filename*=UTF-8''".$utf8Name;
+
+        // 5. CATAT LOG DI SINI
+        LogDownload::make([
+            'type'      => 'imm-lampiran',
+            'record_id' => $lampiran->id,
+            'file'      => $baseName,   
+            'path'      => $path,
+            'category'  => $categoryLog 
+        ]);
+
+        // 6. Return Response (LOGIKA LAMA KAMU)
+        $response = response()->file($full, [
+            'Content-Type'        => $mime,
+            'Content-Disposition' => $disposition,
+            'Content-Length'      => $size,
+            'Accept-Ranges'       => 'bytes',
+            'Cache-Control'       => 'private, max-age=0, must-revalidate',
+        ]);
+
+        if (is_file($full)) {
+            $response->setEtag(md5_file($full));
+            $response->setLastModified(\Illuminate\Support\Carbon::createFromTimestamp(filemtime($full)));
+        }
+
+        return $response;
     }
 }

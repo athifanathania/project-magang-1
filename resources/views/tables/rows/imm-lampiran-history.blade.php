@@ -117,7 +117,7 @@
     @endphp
 
     <h3 class="text-sm font-semibold">
-      Riwayat file dari {{ $noun }} <span class="text-gray-900">"{{ $lampiranName }}"</span>
+      Riwayat file master dari {{ $noun }} <span class="text-gray-900">"{{ $lampiranName }}"</span>
     </h3>
     <div class="mt-2 rounded-xl ring-1 ring-gray-200 shadow-sm overflow-hidden">
       <div class="max-w-full overflow-x-auto">
