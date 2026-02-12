@@ -116,6 +116,7 @@
         \App\Filament\Resources\ImmProsedurResource::class,
         \App\Filament\Resources\ImmInstruksiStandarResource::class,
         \App\Filament\Resources\ImmFormulirResource::class,
+        \App\Filament\Resources\EventCustomerResource::class,
     ], true);
 @endphp
 

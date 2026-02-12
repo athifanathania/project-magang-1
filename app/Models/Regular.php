@@ -78,4 +78,9 @@ class Regular extends Model
 
         $activity->properties = $props;
     }
+
+    public function customer(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Customer::class);
+    }
 }

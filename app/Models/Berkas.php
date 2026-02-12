@@ -9,6 +9,7 @@ use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\Contracts\Activity;
 use App\Models\Concerns\HumanReadableActivity;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Berkas extends Model
 {
@@ -96,5 +97,10 @@ class Berkas extends Model
             'url'           => $currentUrl,
             'snapshot_name' => $this->getActivityDisplayName(), 
         ]);
+    }
+
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class);
     }
 }

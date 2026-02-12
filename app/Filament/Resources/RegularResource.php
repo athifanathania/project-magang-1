@@ -116,164 +116,152 @@ class RegularResource extends Resource
             ->striped()
             ->filtersLayout(\Filament\Tables\Enums\FiltersLayout::Dropdown)
             ->filters([
-                Filter::make('hierarchy')
-                    ->label('Filter Dokumen')
+                // =================================================================
+                // 1. FILTER HIERARKI (5 TINGKAT: Cust -> Gol -> Model -> PartNo -> Nama)
+                // =================================================================
+                \Filament\Tables\Filters\Filter::make('hierarchy')
+                    ->label('Filter Spesifik')
                     ->form([
-                        Select::make('cust_name')
+                        // LEVEL 1: CUST NAME
+                        \Filament\Forms\Components\Select::make('cust_name')
                             ->label('Cust Name')
-                            ->options(fn () =>
-                                Regular::query()
-                                    ->whereNotNull('cust_name')
-                                    ->distinct()
-                                    ->orderBy('cust_name')
-                                    ->pluck('cust_name', 'cust_name')
-                            )
+                            ->options(fn () => \App\Models\Regular::query()
+                                ->whereNotNull('cust_name')->distinct()->orderBy('cust_name')
+                                ->pluck('cust_name', 'cust_name'))
+                            ->searchable()
                             ->reactive()
                             ->afterStateUpdated(fn (callable $set) => [
-                                $set('model', null),
-                                $set('kode_berkas', null),
+                                $set('golongan', null), 
+                                $set('model', null), 
+                                $set('kode_berkas', null), 
+                                $set('nama', null)
                             ]),
 
-                        Select::make('model')
-                            ->label('Model')
-                            ->options(fn (Get $get) =>
-                                Regular::query()
-                                    ->when(
-                                        $get('cust_name'),
-                                        fn ($q) => $q->where('cust_name', $get('cust_name'))
-                                    )
-                                    ->whereNotNull('model')
-                                    ->distinct()
-                                    ->orderBy('model')
-                                    ->pluck('model', 'model')
-                            )
+                        // LEVEL 2: GOLONGAN
+                        \Filament\Forms\Components\Select::make('golongan')
+                            ->label('Golongan')
+                            ->options(fn (\Filament\Forms\Get $get) => \App\Models\Regular::query()
+                                ->when($get('cust_name'), fn ($q) => $q->where('cust_name', $get('cust_name')))
+                                ->whereNotNull('golongan')->distinct()->orderBy('golongan')
+                                ->pluck('golongan', 'golongan'))
+                            ->searchable()
                             ->reactive()
-                            ->afterStateUpdated(fn (callable $set) =>
-                                $set('kode_berkas', null)
-                            ),
+                            ->afterStateUpdated(fn (callable $set) => [
+                                $set('model', null), 
+                                $set('kode_berkas', null), 
+                                $set('nama', null)
+                            ]),
 
-                        Select::make('kode_berkas')
-                            ->label('Part No')
-                            ->options(fn (Get $get) =>
-                                Regular::query()
-                                    ->when(
-                                        $get('cust_name'),
-                                        fn ($q) => $q->where('cust_name', $get('cust_name'))
-                                    )
-                                    ->when(
-                                        $get('model'),
-                                        fn ($q) => $q->where('model', $get('model'))
-                                    )
-                                    ->whereNotNull('kode_berkas')
-                                    ->distinct()
-                                    ->orderBy('kode_berkas')
-                                    ->pluck('kode_berkas', 'kode_berkas')
-                            ),
+                        // LEVEL 3: MODEL
+                        \Filament\Forms\Components\Select::make('model')
+                            ->label('Model')
+                            ->options(fn (\Filament\Forms\Get $get) => \App\Models\Regular::query()
+                                ->when($get('cust_name'), fn ($q) => $q->where('cust_name', $get('cust_name')))
+                                ->when($get('golongan'), fn ($q) => $q->where('golongan', $get('golongan')))
+                                ->whereNotNull('model')->distinct()->orderBy('model')
+                                ->pluck('model', 'model'))
+                            ->searchable()
+                            ->reactive()
+                            ->afterStateUpdated(fn (callable $set) => [
+                                $set('kode_berkas', null), 
+                                $set('nama', null)
+                            ]),
+
+                        \Filament\Forms\Components\Select::make('part_info')
+                            ->label('Part No - Part Name')
+                            ->options(fn (\Filament\Forms\Get $get) => \App\Models\Regular::query()
+                                ->when($get('cust_name'), fn ($q) => $q->where('cust_name', $get('cust_name')))
+                                ->when($get('golongan'), fn ($q) => $q->where('golongan', $get('golongan')))
+                                ->when($get('model'), fn ($q) => $q->where('model', $get('model')))
+                                ->whereNotNull('kode_berkas')
+                                ->select('kode_berkas', 'nama') 
+                                ->distinct()
+                                ->get()
+                                ->mapWithKeys(function ($item) {
+                                    return [$item->kode_berkas => "{$item->kode_berkas} - {$item->nama}"];
+                                }))
+                            ->searchable() 
+                            ->preload()    
+                            ->reactive(),
                     ])
-
-                    // 🔹 QUERY UTAMA (WAJIB di Filter, bukan di Select)
-                    ->query(function (Builder $query, array $data) {
+                    ->query(function (\Illuminate\Database\Eloquent\Builder $query, array $data) {
                         return $query
-                            ->when(
-                                $data['cust_name'] ?? null,
-                                fn ($q, $v) => $q->where('cust_name', $v)
-                            )
-                            ->when(
-                                $data['model'] ?? null,
-                                fn ($q, $v) => $q->where('model', $v)
-                            )
-                            ->when(
-                                $data['kode_berkas'] ?? null,
-                                fn ($q, $v) => $q->where('kode_berkas', $v)
-                            );
+                            ->when($data['cust_name'] ?? null, fn ($q, $v) => $q->where('cust_name', $v))
+                            ->when($data['golongan'] ?? null, fn ($q, $v) => $q->where('golongan', $v))
+                            ->when($data['model'] ?? null, fn ($q, $v) => $q->where('model', $v))
+                            ->when($data['part_info'] ?? null, fn ($q, $v) => $q->where('kode_berkas', $v));
                     })
-
-                    // 🔹 Label active filter (kayak BOM)
                     ->indicateUsing(function (array $data): array {
                         return collect([
-                            $data['cust_name']   ? "Cust: {$data['cust_name']}" : null,
-                            $data['model']       ? "Model: {$data['model']}" : null,
-                            $data['kode_berkas'] ? "Part: {$data['kode_berkas']}" : null,
+                            ($data['cust_name'] ?? null) ? "Cust: {$data['cust_name']}" : null,
+                            ($data['golongan'] ?? null)  ? "Gol: {$data['golongan']}" : null,
+                            ($data['model'] ?? null)     ? "Model: {$data['model']}" : null,
+                            ($data['part_info'] ?? null) ? "Part: {$data['part_info']}" : null,
                         ])->filter()->values()->all();
                     }),
 
+                // =================================================================
+                // 2. FILTER PENCARIAN CUSTOM (Termasuk Lampiran)
+                // =================================================================
                 \Filament\Tables\Filters\Filter::make('q')
                     ->label('Cari')
                     ->form([
                         \Filament\Forms\Components\Grid::make()
-                            ->columns(12)
+                            ->columns(1) // Layout vertikal agar teks tidak terpotong
                             ->schema([
                                 \Filament\Forms\Components\TagsInput::make('terms')
                                     ->label('Kata kunci')
-                                    ->placeholder('Ketik lalu Enter untuk menambah')
+                                    ->placeholder('Ketik & Enter')
                                     ->separator(',')
                                     ->reorderable()
-                                    ->live(debounce: 300)
-                                    ->columnSpan(9),
+                                    ->live(debounce: 300),
 
                                 \Filament\Forms\Components\Toggle::make('all')
-                                    ->label('All keywords')
-                                    ->inline(true)        // toggle + label satu baris, di kanan
-                                    ->columnSpan(5),
+                                    ->label('Match All Keywords') 
+                                    ->inline(true)
+                                    ->helperText('Aktifkan untuk mencari semua kata (AND)'),
                             ]),
                     ])
-                    ->query(function (\Illuminate\Database\Eloquent\Builder $query, array $data) use ($tbl): void {
-                        $terms = collect($data['terms'] ?? [])
-                            ->filter(fn ($t) => is_string($t) && trim($t) !== '')
-                            ->map(fn ($t) => trim($t))
-                            ->unique()
-                            ->values()
-                            ->all();
+                    ->query(function (\Illuminate\Database\Eloquent\Builder $query, array $data): void {
+                        $terms = collect($data['terms'] ?? [])->filter(fn ($t) => filled($t))->unique()->values();
+                        if ($terms->isEmpty()) return;
 
-                        if (empty($terms)) return;
-
+                        $tbl = $query->getModel()->getTable();
                         $modeAll = filter_var($data['all'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
-                        $buildOneTermClause = function (\Illuminate\Database\Eloquent\Builder $q2, string $term) use ($tbl): void {
-                            $like = '%' . mb_strtolower($term) . '%';
-
-                            $q2->where(function (\Illuminate\Database\Eloquent\Builder $g) use ($like, $tbl) {
+                        $buildOneTermClause = function ($q2, $term) use ($tbl) {
+                            $like = '%' . mb_strtolower(trim($term)) . '%';
+                            $q2->where(function ($g) use ($like, $tbl) {
                                 $g->whereRaw("LOWER({$tbl}.kode_berkas) LIKE ?", [$like])
                                 ->orWhereRaw("LOWER({$tbl}.cust_name) LIKE ?", [$like])
+                                ->orWhereRaw("LOWER({$tbl}.golongan) LIKE ?", [$like])
                                 ->orWhereRaw("LOWER({$tbl}.model) LIKE ?", [$like])
                                 ->orWhereRaw("LOWER({$tbl}.nama) LIKE ?", [$like])
                                 ->orWhereRaw("LOWER({$tbl}.detail) LIKE ?", [$like])
-                                ->orWhereRaw("LOWER({$tbl}.dokumen) LIKE ?", [$like])
                                 ->orWhereRaw("LOWER(CAST({$tbl}.keywords AS CHAR)) LIKE ?", [$like]);
 
-                                // relasi lampirans
-                                $g->orWhere(function (\Illuminate\Database\Eloquent\Builder $q) use ($like) {
-                                    $q->whereHas('lampirans', function (\Illuminate\Database\Eloquent\Builder $l) use ($like) {
-                                        $l->where(function (\Illuminate\Database\Eloquent\Builder $lx) use ($like) {
-                                            $lx->whereRaw('LOWER(lampirans.nama) LIKE ?', [$like])
-                                            ->orWhereRaw('LOWER(lampirans.file) LIKE ?', [$like])
-                                            ->orWhereRaw('LOWER(CAST(lampirans.keywords AS CHAR)) LIKE ?', [$like]);
-                                        });
+                                $g->orWhereHas('lampirans', function ($l) use ($like) {
+                                    $l->where(function ($lx) use ($like) {
+                                        $lx->whereRaw('LOWER(nama) LIKE ?', [$like])
+                                        ->orWhereRaw('LOWER(file) LIKE ?', [$like])
+                                        ->orWhereRaw('LOWER(CAST(keywords AS CHAR)) LIKE ?', [$like]);
                                     });
                                 });
                             });
                         };
 
-                        $query->where(function (\Illuminate\Database\Eloquent\Builder $outer) use ($terms, $modeAll, $buildOneTermClause) {
+                        $query->where(function ($outer) use ($terms, $modeAll, $buildOneTermClause) {
                             if ($modeAll) {
-                                foreach ($terms as $term) {
-                                    $outer->where(fn ($sub) => $buildOneTermClause($sub, $term));
-                                }
+                                foreach ($terms as $term) $outer->where(fn ($sub) => $buildOneTermClause($sub, $term));
                             } else {
                                 $outer->where(function ($subOr) use ($terms, $buildOneTermClause) {
-                                    foreach ($terms as $term) {
-                                        $subOr->orWhere(fn ($sub) => $buildOneTermClause($sub, $term));
-                                    }
+                                    foreach ($terms as $term) $subOr->orWhere(fn ($sub) => $buildOneTermClause($sub, $term));
                                 });
                             }
                         });
                     })
-                    ->indicateUsing(function (array $data): ?string {
-                        $tags = collect($data['terms'] ?? [])
-                            ->filter(fn ($t) => is_string($t) && trim($t) !== '');
-                        return $tags->isNotEmpty() ? 'Cari: '.$tags->implode(', ') : null;
-                    }),
-            ]) 
+                    ->indicateUsing(fn (array $data) => count($data['terms'] ?? []) ? 'Cari: ' . implode(', ', $data['terms']) : null),
+            ])
             ->actions([
                 \Filament\Tables\Actions\Action::make('lampiran')
                     ->label('')
@@ -333,7 +321,7 @@ class RegularResource extends Resource
     {
         return [
             'index'  => Pages\ListRegular::route('/'),
-            'create' => Pages\CreateRegular::route('/create'),
+            // 'create' => Pages\CreateRegular::route('/create'),
             'edit'   => Pages\EditRegular::route('/{record}/edit'),
         ];
     }
@@ -354,7 +342,7 @@ class RegularResource extends Resource
     }
     public static function canCreate(): bool
     {
-        return \App\Filament\Resources\BerkasResource::canCreate();
+        return false;
     }
     public static function canDelete($record): bool
     {

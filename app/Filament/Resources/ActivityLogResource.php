@@ -11,6 +11,9 @@ use Illuminate\Database\Eloquent\Builder;
 use App\Filament\Resources\ActivityLogResource\Pages;
 use App\Models\User;
 use Illuminate\Support\Carbon;
+use pxlrbt\FilamentExcel\Actions\Tables\ExportAction;
+use pxlrbt\FilamentExcel\Exports\ExcelExport;
+use pxlrbt\FilamentExcel\Columns\Column;
 
 class ActivityLogResource extends Resource
 {
@@ -33,6 +36,61 @@ class ActivityLogResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->headerActions([
+                ExportAction::make()
+                    ->label('Export Excel')
+                    ->color('success') // Warna hijau biar khas Excel
+                    ->exports([
+                        ExcelExport::make()
+                            ->fromTable() // Ini KUNCI agar mengikuti Filter Tabel
+                            ->withFilename(fn () => 'Log-Activity-' . date('Y-m-d'))
+                            ->withColumns([
+                                // 1. WAKTU
+                                Column::make('created_at')
+                                    ->heading('Waktu')
+                                    ->formatStateUsing(fn ($state) => Carbon::parse($state)->format('d/m/Y H:i')),
+
+                                // 2. USER (Logika: Cek user, kalau null = Public)
+                                Column::make('causer.name')
+                                    ->heading('User')
+                                    ->formatStateUsing(fn ($record) => $record->causer?->name ?? 'Public'),
+
+                                // 3. AKSI
+                                Column::make('event')
+                                    ->heading('Aksi')
+                                    ->formatStateUsing(fn ($state) => ucfirst($state)),
+
+                                // 4. DESKRIPSI
+                                Column::make('description')
+                                    ->heading('Deskripsi'),
+
+                                // 5. OBJEK (Logika kompleks Anda disalin ke sini agar hasil excel rapi)
+                                Column::make('subject_type')
+                                    ->heading('Objek')
+                                    ->formatStateUsing(function ($record) {
+                                        if ($record->subject_type === \App\Models\User::class && $record->subject) {
+                                            return $record->subject->name . ' #' . ($record->subject->department ?? '-');
+                                        }
+                                        // Prioritas Model Function
+                                        if ($record->subject && method_exists($record->subject, 'getActivityDisplayName')) {
+                                            return $record->subject->getActivityDisplayName();
+                                        }
+                                        // Cek property custom label
+                                        $label = $record->getExtraProperty('object_label');
+                                        if (filled($label)) {
+                                            return str_replace('Berkas: Event:', 'Event:', $label);
+                                        }
+                                        // Fallback
+                                        if (! $record->subject_type || ! $record->subject_id) return '-';
+                                        return class_basename($record->subject_type) . '#' . $record->subject_id;
+                                    }),
+
+                                // 6. IP ADDRESS
+                                Column::make('properties.ip')
+                                    ->heading('IP Address'),
+                            ]),
+                    ]),
+            ])
             ->paginated([10, 25, 50])
             ->defaultPaginationPageOption(10)
             ->striped()

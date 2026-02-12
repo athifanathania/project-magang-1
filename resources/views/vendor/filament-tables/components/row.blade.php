@@ -29,6 +29,7 @@
         \App\Filament\Resources\ImmInstruksiStandarResource::class,
         \App\Filament\Resources\ImmFormulirResource::class,
         \App\Filament\Resources\RegularResource::class,
+        \App\Filament\Resources\EventCustomerResource::class,
     ], true);
 
     $hasSelection = method_exists($this, 'isTableSelectionEnabled')
@@ -36,7 +37,7 @@
         : false;
 
     // butuh kolom caret sendiri hanya kalau tidak ada selection
-    $needsOwnCaretCol = $supportsCaret && ! $hasSelection;
+    $needsOwnCaretCol = $supportsCaret;
 
     // flag halaman IMM (punyamu sebelumnya)...
     $isImm = in_array($resourceClass, [

@@ -2,8 +2,8 @@
 
 namespace App\Filament\Resources;
 
-use App\Filament\Resources\BerkasResource\Pages;
-use App\Models\Berkas;
+use App\Filament\Resources\EventCustomerResource\Pages;
+use App\Models\EventCustomer; // Pastikan Model ini sudah dibuat
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
@@ -27,24 +27,20 @@ use Illuminate\Validation\Rule;
 use Filament\Forms\Get;
 use Illuminate\Database\Eloquent\Model;
 use Filament\Forms\Components\Select;
-use App\Models\Regular; 
-use Illuminate\Support\Facades\DB;
-use Filament\Notifications\Notification;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
-class BerkasResource extends Resource
+class EventCustomerResource extends Resource
 {
-    protected static ?string $model = Berkas::class;
+    // Arahkan ke model baru agar data terpisah dari Berkas (Event Document)
+    protected static ?string $model = EventCustomer::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationIcon = 'heroicon-o-user-group'; // Icon sedikit beda biar mudah dibedakan visualnya (opsional)
 
-    protected static ?string $navigationLabel = 'Event Document';
+    protected static ?string $navigationLabel = 'Event Customer';
     protected static ?string $navigationGroup = 'Dokumen Eksternal';
 
-    protected static ?string $modelLabel = 'dokumen';   
-    protected static ?int    $navigationSort  = 1;
-    protected static ?string $pluralModelLabel = 'Event Document'; 
+    protected static ?string $modelLabel = 'Event Customer';   
+    protected static ?int    $navigationSort  = 4;  // Urutan setelah Event Document
+    protected static ?string $pluralModelLabel = 'Event Customer'; 
 
     use RowClickViewForNonEditors, FileCell;
 
@@ -65,9 +61,10 @@ class BerkasResource extends Resource
                     ->imageResizeMode('cover')
                     ->imageResizeUpscale(false)
                     ->disk('public')
-                    ->directory('berkas/thumbnails')
+                    // Simpan di folder terpisah agar rapi
+                    ->directory('event_customers/thumbnails')
                     ->imagePreviewHeight('150')
-                    ->openable()   
+                    ->openable()          
                     ->downloadable()
                     ->visibility('public')
                     ->preserveFilenames()
@@ -82,16 +79,6 @@ class BerkasResource extends Resource
                     ->preload()    
                     ->required(fn (string $context) => $context === 'create'),
                     
-                Select::make('golongan')
-                    ->label('Jenis Dokumen')
-                    ->options([
-                        'New Model' => 'New Model (Bisa Final ke Regular)',
-                        'Activity'  => 'Activity (Berkelanjutan)',
-                    ])
-                    ->required()
-                    ->native(false)
-                    ->default('New Model'),
-
                 TextInput::make('model')
                     ->label('Model')
                     ->placeholder('mis. YTB')
@@ -103,32 +90,34 @@ class BerkasResource extends Resource
                     ->required()
                     ->rules(function (Get $get, ?Model $record) {
                         $detail = mb_strtolower(trim((string) $get('detail')));
-                        return Rule::unique('berkas', 'kode_berkas')
+                        // Ubah 'berkas' ke nama tabel model EventCustomer, misal 'event_customers'
+                        return Rule::unique('event_customers', 'kode_berkas')
                             ->where(fn ($q) => $q->whereRaw('LOWER(TRIM(`detail`)) = ?', [$detail]))
                             ->ignore($record?->getKey());
                     })
                     ->validationMessages([
-                        'unique' => 'Dokumen yang ditambahkan sudah tersedia di tabel Event.',
+                        'unique' => 'Data yang ditambahkan sudah tersedia di tabel Event Customer.',
                     ]),
-
 
                 TextInput::make('nama')
                     ->label('Part Name')
                     ->required(),
                 
+                // === PERUBAHAN LABEL DI SINI ===
                 TextInput::make('detail')
-                    ->label('Detail Event')
+                    ->label('Poin Audit')   // Diganti dari Detail Event
                     ->placeholder('mis. Document')
                     ->required()
                     ->datalist(['Document','Part'])
                     ->rules(function (Get $get, ?\Illuminate\Database\Eloquent\Model $record) {
                         $kode = mb_strtolower(trim((string) $get('kode_berkas')));
-                        return Rule::unique('berkas', 'detail')
+                        // Ubah 'berkas' ke nama tabel model EventCustomer
+                        return Rule::unique('event_customers', 'detail')
                             ->where(fn ($q) => $q->whereRaw('LOWER(TRIM(`kode_berkas`)) = ?', [$kode]))
                             ->ignore($record?->getKey());
                     })
                     ->validationMessages([
-                        'unique' => 'Dokumen yang ditambahkan sudah tersedia di tabel Event.',
+                        'unique' => 'Data yang ditambahkan sudah tersedia di tabel Event Customer.',
                     ]),
 
                 TagsInput::make('keywords')
@@ -142,7 +131,8 @@ class BerkasResource extends Resource
                 FileUpload::make('dokumen')
                     ->label('Dokumen')
                     ->disk('private')
-                    ->directory('berkas')
+                    // Folder penyimpanan dipisah
+                    ->directory('event_customers')
                     ->preserveFilenames()
                     ->rules(['file'])
                     ->previewable(true)
@@ -156,7 +146,7 @@ class BerkasResource extends Resource
                         }
 
                         $filename = time() . '_' . $file->getClientOriginalName(); 
-                        return $file->storeAs('berkas/tmp', $filename, 'private');
+                        return $file->storeAs('event_customers/tmp', $filename, 'private');
                     })
                     ->deleteUploadedFileUsing(fn () => null)
                     ->hintAction(
@@ -164,7 +154,8 @@ class BerkasResource extends Resource
                             ->label('Buka file')
                             ->url(
                                 fn ($record) => ($record && $record->dokumen)
-                                    ? route('media.berkas', $record)
+                                    // Pastikan route ini ada atau sesuaikan
+                                    ? route('media.event_customer', $record)
                                     : null,
                                 shouldOpenInNewTab: true
                             )
@@ -177,18 +168,18 @@ class BerkasResource extends Resource
                 FileUpload::make('dokumen_src')
                     ->label('File Asli (Admin saja)')
                     ->disk('private')
-                    ->directory('berkas/_source')     // pisahkan folder sumber
+                    ->directory('event_customers/_source')     
                     ->preserveFilenames()
                     ->rules(['nullable','file'])
                     ->previewable(true)
-                    ->downloadable(false)             // jangan expose URL publik
+                    ->downloadable(false)            
                     ->openable(false)
                     ->preserveFilenames()
                     ->visible(fn () => auth()->user()?->hasRole('Admin') ?? false),
 
 
                 // =========================
-                // Lampiran (disarankan kelola via tabel/aksi)
+                // Lampiran 
                 // =========================
                 \Filament\Forms\Components\Section::make('Dokumen Pelengkap')
                     ->description('Kelola dokumen pelengkap melalui tombol "Tambah Lampiran" di panel tabel.'),
@@ -196,7 +187,7 @@ class BerkasResource extends Resource
                     ->visible(fn (string $context) => $context === 'view')
                     ->schema([
                         ViewField::make('dokumen_history')
-                            ->view('tables.rows.berkas-history')
+                            ->view('tables.rows.berkas-history') // Bisa re-use view yang sama jika struktur datanya sama
                             ->columnSpanFull(),
                     ]),
 
@@ -214,94 +205,72 @@ class BerkasResource extends Resource
                 TextColumn::make('cust_name')
                     ->label('Cust Name')
                     ->sortable()
-                    ->searchable() 
                     ->limit(16)
                     ->tooltip(fn (?string $state) => $state)
-                    ->grow(false)                                  
-                    ->width('8rem')
-                    ->extraHeaderAttributes(['class' => 'w-[8rem]'])
+                    ->width('8rem') 
+                    ->grow(false)   
                     ->extraCellAttributes([
-                        'class' => 'w-[8rem] max-w-[8rem] whitespace-nowrap truncate',
+                        'class' => 'whitespace-nowrap truncate', 
                     ]),
-
-                TextColumn::make('golongan')
-                    ->label('Golongan')
-                    ->sortable()
-                    ->badge()
-                    ->searchable() 
-                    ->colors([
-                        'success' => 'New Model', 
-                        'warning' => 'Activity',  
-                    ])
-                    ->extraCellAttributes(['class' => 'whitespace-nowrap']),
 
                 TextColumn::make('model')
                     ->label('Model')
                     ->sortable()
-                    ->searchable() 
                     ->extraCellAttributes(['class' => 'max-w-[7rem] whitespace-normal break-words']),
 
                 TextColumn::make('kode_berkas')
                     ->label('Part No')
-                    ->sortable()
-                    ->searchable() 
-                    ->extraCellAttributes(['class' => 'max-w-[10rem] whitespace-normal break-words']),
+                    ->extraCellAttributes(['class' => 'max-w-[10rem] whitespace-normal break-words'])
+                    ->sortable(),
 
                 ImageColumn::make('thumbnail')
                     ->label('')
                     ->disk('public')
-                    ->searchable()  
                     ->extraImgAttributes([
                         'class' => 'h-auto w-auto max-h-24 max-w-32 object-contain rounded-none',
                     ])
                     ->extraCellAttributes([
-                        'class' => 'w-[140px]',
+                        'class' => 'w-[140px]', 
+                    ])
+                    ->extraHeaderAttributes([
+                        'class' => 'w-[140px]', 
                     ])
                     ->defaultImageUrl(asset('images/placeholder.png'))
-                    ->sortable(false),
+                    ->sortable(false)
+                    ->searchable(false),
 
                 TextColumn::make('nama')
                     ->label('Part Name')
                     ->sortable()
-                    ->searchable() 
                     ->wrap()
                     ->extraCellAttributes([
                         'class' => 'max-w-[18rem] whitespace-normal break-words',
                     ]),
-
+                
                 TextColumn::make('detail')
-                    ->label('Detail Event')
+                    ->label('Poin Audit') 
                     ->wrap()
-                    ->searchable() 
                     ->extraCellAttributes([
                         'class' => 'max-w-[14rem] whitespace-normal break-words',
                     ]),
-
-                // === PERBAIKAN SEARCHABLE KEYWORDS (Supaya tidak error column not found) ===
+                    
                 ViewColumn::make('keywords_display')
                     ->label('Kata Kunci')
                     ->state(fn ($record) => $record->keywords)
                     ->view('tables.columns.keywords-grid')
-                    // Definisikan query manual karena kolom 'keywords_display' tidak ada di DB
-                    ->searchable(query: function ($query, string $search) { 
-                        return $query->where('keywords', 'like', "%{$search}%");
-                    })
                     ->extraCellAttributes([
                         'class' => 'max-w-[22rem] whitespace-normal break-words',
                     ]),
 
                 static::fileTextColumn('dokumen', function ($record) {
-                    return $record instanceof \App\Models\Regular
-                        ? route('media.regular', $record)
-                        : route('media.berkas', $record);
+                    return route('media.event_customer', $record);
                 })
                     ->label('File')
-                    ->searchable() 
                     ->extraCellAttributes(['class' => 'text-xs']),
             ]) 
             ->filters([
                 // =================================================================
-                // 1. FILTER HIERARKI (4 TINGKAT: Cust -> Gol -> Model -> PartNo-Name)
+                // 1. FILTER HIERARKI (3 TINGKAT: Cust -> Model -> PartNo-Name)
                 // =================================================================
                 \Filament\Tables\Filters\Filter::make('hierarchy')
                     ->label('Filter Spesifik')
@@ -309,51 +278,34 @@ class BerkasResource extends Resource
                         // LEVEL 1: CUST NAME
                         \Filament\Forms\Components\Select::make('cust_name')
                             ->label('Cust Name')
-                            ->options(fn () => \App\Models\Berkas::query()
+                            ->options(fn () => \App\Models\EventCustomer::query()
                                 ->whereNotNull('cust_name')->distinct()->orderBy('cust_name')
                                 ->pluck('cust_name', 'cust_name'))
                             ->searchable()
                             ->reactive()
                             ->afterStateUpdated(fn (callable $set) => [
-                                $set('golongan', null), 
                                 $set('model', null), 
-                                $set('part_info', null), // Reset field gabungan
+                                $set('part_info', null),
                             ]),
 
-                        // LEVEL 2: GOLONGAN
-                        \Filament\Forms\Components\Select::make('golongan')
-                            ->label('Golongan')
-                            ->options(fn (\Filament\Forms\Get $get) => \App\Models\Berkas::query()
-                                ->when($get('cust_name'), fn ($q) => $q->where('cust_name', $get('cust_name')))
-                                ->whereNotNull('golongan')->distinct()->orderBy('golongan')
-                                ->pluck('golongan', 'golongan'))
-                            ->searchable()
-                            ->reactive()
-                            ->afterStateUpdated(fn (callable $set) => [
-                                $set('model', null), 
-                                $set('part_info', null), // Reset field gabungan
-                            ]),
-
-                        // LEVEL 3: MODEL
+                        // LEVEL 2: MODEL
                         \Filament\Forms\Components\Select::make('model')
                             ->label('Model')
-                            ->options(fn (\Filament\Forms\Get $get) => \App\Models\Berkas::query()
+                            ->options(fn (\Filament\Forms\Get $get) => \App\Models\EventCustomer::query()
                                 ->when($get('cust_name'), fn ($q) => $q->where('cust_name', $get('cust_name')))
-                                ->when($get('golongan'), fn ($q) => $q->where('golongan', $get('golongan')))
                                 ->whereNotNull('model')->distinct()->orderBy('model')
                                 ->pluck('model', 'model'))
                             ->searchable()
                             ->reactive()
                             ->afterStateUpdated(fn (callable $set) => [
-                                $set('part_info', null), // Reset field gabungan
+                                $set('part_info', null),
                             ]),
 
-                        // LEVEL 4: PART NO - PART NAME (GABUNGAN)
+                        // LEVEL 3: PART NO - PART NAME (GABUNGAN)
                         \Filament\Forms\Components\Select::make('part_info')
                             ->label('Part No - Part Name')
-                            ->options(fn (\Filament\Forms\Get $get) => \App\Models\Berkas::query()
+                            ->options(fn (\Filament\Forms\Get $get) => \App\Models\EventCustomer::query()
                                 ->when($get('cust_name'), fn ($q) => $q->where('cust_name', $get('cust_name')))
-                                ->when($get('golongan'), fn ($q) => $q->where('golongan', $get('golongan')))
                                 ->when($get('model'), fn ($q) => $q->where('model', $get('model')))
                                 ->whereNotNull('kode_berkas')
                                 ->select('kode_berkas', 'nama')
@@ -369,15 +321,12 @@ class BerkasResource extends Resource
                     ->query(function (\Illuminate\Database\Eloquent\Builder $query, array $data) {
                         return $query
                             ->when($data['cust_name'] ?? null, fn ($q, $v) => $q->where('cust_name', $v))
-                            ->when($data['golongan'] ?? null, fn ($q, $v) => $q->where('golongan', $v))
                             ->when($data['model'] ?? null, fn ($q, $v) => $q->where('model', $v))
-                            // Gunakan part_info untuk memfilter kode_berkas
                             ->when($data['part_info'] ?? null, fn ($q, $v) => $q->where('kode_berkas', $v));
                     })
                     ->indicateUsing(function (array $data): array {
                         return collect([
                             ($data['cust_name'] ?? null) ? "Cust: {$data['cust_name']}" : null,
-                            ($data['golongan'] ?? null)  ? "Gol: {$data['golongan']}" : null,
                             ($data['model'] ?? null)     ? "Model: {$data['model']}" : null,
                             ($data['part_info'] ?? null) ? "Part: {$data['part_info']}" : null,
                         ])->filter()->values()->all();
@@ -388,7 +337,7 @@ class BerkasResource extends Resource
                 // =================================================================
                 \Filament\Tables\Filters\Filter::make('q')
                     ->label('Cari')
-                    ->form([ // <--- TETAP HARUS ADA
+                    ->form([
                         \Filament\Forms\Components\Grid::make()
                             ->columns(1)
                             ->schema([
@@ -409,25 +358,22 @@ class BerkasResource extends Resource
                         $terms = collect($data['terms'] ?? [])->filter(fn ($t) => filled($t))->unique()->values();
                         if ($terms->isEmpty()) return;
 
-                        // Ambil nama tabel secara dinamis ('berkas')
                         $tbl = $query->getModel()->getTable();
                         $modeAll = filter_var($data['all'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
-                        // Logic pencarian per kata
                         $buildOneTermClause = function ($q2, $term) use ($tbl) {
                             $like = '%' . mb_strtolower(trim($term)) . '%';
 
                             $q2->where(function ($g) use ($like, $tbl) {
-                                // A. Cari di tabel Berkas (Induk)
+                                // A. Cari di tabel Induk
                                 $g->whereRaw("LOWER({$tbl}.kode_berkas) LIKE ?", [$like])
                                 ->orWhereRaw("LOWER({$tbl}.cust_name) LIKE ?", [$like])
-                                ->orWhereRaw("LOWER({$tbl}.golongan) LIKE ?", [$like]) // Tambahan field golongan
                                 ->orWhereRaw("LOWER({$tbl}.model) LIKE ?", [$like])
                                 ->orWhereRaw("LOWER({$tbl}.nama) LIKE ?", [$like])
                                 ->orWhereRaw("LOWER({$tbl}.detail) LIKE ?", [$like])
                                 ->orWhereRaw("LOWER(CAST({$tbl}.keywords AS CHAR)) LIKE ?", [$like]);
 
-                                // B. Cari di Relasi Lampiran (Anak)
+                                // B. Cari di Relasi Lampiran
                                 $g->orWhereHas('lampirans', function ($l) use ($like) {
                                     $l->where(function ($lx) use ($like) {
                                         $lx->whereRaw('LOWER(nama) LIKE ?', [$like])
@@ -438,7 +384,6 @@ class BerkasResource extends Resource
                             });
                         };
 
-                        // Terapkan loop terms
                         $query->where(function ($outer) use ($terms, $modeAll, $buildOneTermClause) {
                             if ($modeAll) {
                                 foreach ($terms as $term) $outer->where(fn ($sub) => $buildOneTermClause($sub, $term));
@@ -452,119 +397,22 @@ class BerkasResource extends Resource
                     ->indicateUsing(fn (array $data) => count($data['terms'] ?? []) ? 'Cari: ' . implode(', ', $data['terms']) : null),
             ])
             ->actions([
-                Action::make('finalize')
-                    ->label('Move')
-                    ->icon('heroicon-m-arrow-right-start-on-rectangle')
-                    ->color('success')
-                    ->requiresConfirmation()
-                    ->modalHeading('Pindahkan ke Regular Document?')
-                    ->modalDescription('Apakah Anda yakin dokumen ini sudah final? Data akan dipindahkan dari Event Document ke kategori Regular.')
-                    ->modalSubmitActionLabel('Ya, Pindahkan')
-                    ->modalCancelActionLabel('Batal')
-                    ->visible(fn (Berkas $record) => 
-                        $record->golongan === 'New Model' && 
-                        (auth()->user()?->hasAnyRole(['Admin', 'Editor']) ?? false)
-                    )
-                    ->action(function (Berkas $record) {
-                        DB::transaction(function () use ($record) {
-                            // ... (LOGIKA COPY ANDA TETAP SAMA DI SINI) ...
-                            // Saya menyingkat bagian ini agar tidak terlalu panjang,
-                            // Pastikan isi logic transaction copy file Anda tetap ada di sini.
-                            
-                            // --- 1. HELPER: COPY FILE DENGAN NAMA ASLI ---
-                            $safeCopy = function ($oldPath, $targetFolder) {
-                                if ($oldPath && Storage::disk('private')->exists($oldPath)) {
-                                    $originalName = basename($oldPath);
-                                    $newPath = $targetFolder . now()->format('Ymd_His_') . $originalName;
-                                    Storage::disk('private')->copy($oldPath, $newPath);
-                                    return $newPath;
-                                }
-                                return null;
-                            };
-
-                            // --- 2. HELPER: PROSES HISTORY (VERSI) ---
-                            $processVersions = function ($versionsList) use ($safeCopy) {
-                                $versions = is_string($versionsList) ? json_decode($versionsList, true) : $versionsList;
-                                if (!is_array($versions)) return [];
-                                foreach ($versions as &$ver) {
-                                    $oldVerPath = $ver['file_path'] ?? $ver['path'] ?? null;
-                                    if ($oldVerPath) {
-                                        $newVerPath = $safeCopy($oldVerPath, 'regular/history/');
-                                        if ($newVerPath) {
-                                            $ver['file_path'] = $newVerPath;
-                                            if (isset($ver['path'])) $ver['path'] = $newVerPath;
-                                        }
-                                    }
-                                }
-                                return $versions;
-                            };
-
-                            // --- 3. EKSEKUSI COPY UTAMA ---
-                            $newDokumen    = $safeCopy($record->dokumen, 'regular/');
-                            $newDokumenSrc = $safeCopy($record->dokumen_src, 'regular/src/');
-                            $newThumbnail  = $safeCopy($record->thumbnail, 'regular/thumb/');
-                            $newVersions    = $processVersions($record->dokumen_versions);
-                            $newSrcVersions = $processVersions($record->dokumen_src_versions);
-
-                            // --- 4. BUAT RECORD REGULAR ---
-                            $regular = \App\Models\Regular::create([
-                                'cust_name'   => $record->cust_name,
-                                'model'       => $record->model,
-                                'kode_berkas' => $record->kode_berkas,
-                                'nama'        => $record->nama,
-                                'golongan'    => $record->golongan,
-                                'detail'      => 'Regular',
-                                'keywords'    => $record->keywords,
-                                'dokumen'     => $newDokumen,
-                                'dokumen_src' => $newDokumenSrc,
-                                'thumbnail'   => $newThumbnail,
-                                'dokumen_versions'        => $newVersions,
-                                'dokumen_src_versions'    => $newSrcVersions,
-                                'dokumen_uploaded_at'     => $record->dokumen_uploaded_at,
-                                'dokumen_src_uploaded_at' => $record->dokumen_src_uploaded_at,
-                                'created_at'  => now(),
-                                'updated_at'  => now(),
-                            ]);
-
-                            // --- 5. PINDAHKAN LAMPIRAN (REKURSIF) ---
-                            $copyLampiran = function ($sourceLampirans, $newParentId = null) use (&$copyLampiran, $regular, $safeCopy, $processVersions) {
-                                foreach ($sourceLampirans as $lampiran) {
-                                    $lampiranNewPath = $safeCopy($lampiran->file, 'regular/lampiran/');
-                                    $lampiranNewVersions = [];
-                                    if (!empty($lampiran->file_versions)) {
-                                        $lampiranNewVersions = $processVersions($lampiran->file_versions);
-                                    }
-                                    $newLampiran = \App\Models\Lampiran::create([
-                                        'regular_id'  => $regular->id,
-                                        'berkas_id'   => null,
-                                        'parent_id'   => $newParentId,
-                                        'nama'        => $lampiran->nama,
-                                        'file'        => $lampiranNewPath,
-                                        'file_versions' => $lampiranNewVersions, 
-                                        'keywords'    => $lampiran->keywords,
-                                        'created_at'  => now(),
-                                        'updated_at'  => now(),
-                                    ]);
-                                    if ($lampiran->childrenRecursive && $lampiran->childrenRecursive->count() > 0) {
-                                        $copyLampiran($lampiran->childrenRecursive, $newLampiran->id);
-                                    }
-                                }
-                            };
-
-                            $rootLampirans = $record->rootLampiransRecursive;
-                            $copyLampiran($rootLampirans, null);
-
-                            // --- 6. HAPUS DATA LAMA ---
-                            $record->delete();
-                        });
-
-                        Notification::make()
-                            ->title('Berhasil Move ke Regular')
-                            ->body('File dipindahkan dengan nama asli & riwayat versi tersimpan.')
-                            ->success()
-                            ->send();
-                    }),
-                    
+                Action::make('lampiran')
+                    ->label('')
+                    ->icon('heroicon-m-paper-clip')
+                    ->color('gray')
+                    ->size('xs')                  
+                    ->modalHeading('Dokumen Pelengkap')
+                    ->modalSubmitAction(false)
+                    ->modalWidth('7xl')
+                    ->modalCancelActionLabel('Tutup')
+                    ->modalContent(function (?Model $record) {
+                        if (! $record) return view('tables.rows.lampirans', ['record' => null, 'lampirans' => collect()]);
+                        $roots = $record->rootLampirans()->with('childrenRecursive')->orderBy('id')->get();
+                        return view('tables.rows.lampirans', ['record' => $record, 'lampirans' => $roots]);
+                    })
+                    ->tooltip('Dokumen Pelengkap'),
+    
                 ViewAction::make()
                     ->label('')
                     ->icon('heroicon-m-eye')
@@ -586,7 +434,7 @@ class BerkasResource extends Resource
                 Action::make('downloadSource')
                     ->label('')
                     ->icon('heroicon-o-arrow-down-tray')
-                    ->url(fn ($record) => route('download.source', ['type' => 'berkas','id'=>$record->getKey()]))
+                    ->url(fn ($record) => route('download.source', ['type' => 'event_customer','id'=>$record->getKey()]))
                     ->openUrlInNewTab()
                     ->visible(fn () => \Illuminate\Support\Facades\Gate::allows('download-source'))
                     ->disabled(fn ($record) => blank($record->dokumen_src))
@@ -609,19 +457,19 @@ class BerkasResource extends Resource
             ->recordUrl(null)
             ->recordAction('view');
     }
-
+    
     public static function getRelations(): array
     {
-        //
         return[];
     }
 
     public static function getPages(): array
     {
+        // Pastikan Anda membuat file Pages ini di folder EventCustomerResource/Pages
         return [
-            'index' => Pages\ListBerkas::route('/'),
-            'create' => Pages\CreateBerkas::route('/create'),
-            'edit' => Pages\EditBerkas::route('/{record}/edit'),
+            'index' => Pages\ListEventCustomers::route('/'),
+            'create' => Pages\CreateEventCustomer::route('/create'),
+            'edit' => Pages\EditEventCustomer::route('/{record}/edit'),
         ];
     }
 
@@ -634,39 +482,39 @@ class BerkasResource extends Resource
             $query->where('is_public', true);
         }
 
-        // Default sort: 1) cust_name ASC, 2) model ASC
         return $query
             ->orderByRaw('LOWER(cust_name) ASC')
             ->orderByRaw('LOWER(model) ASC');
     }
 
-    public static function canViewAny(): bool
-    {
-        return optional(\Filament\Facades\Filament::getCurrentPanel())->getId() === 'public'
-            ? true
-            : (auth()->user()?->can('berkas.view') ?? false);
-    }
+    // public static function canViewAny(): bool
+    // {
+    //     return optional(\Filament\Facades\Filament::getCurrentPanel())->getId() === 'public'
+    //         ? true
+    //         // Sesuaikan permission policy Anda, misal 'event_customer.view'
+    //         : (auth()->user()?->can('event_customer.view') ?? false);
+    // }
 
 
-    public static function canCreate(): bool
-    {
-        return auth()->user()?->can('berkas.create') ?? false;
-    }
+    // public static function canCreate(): bool
+    // {
+    //     return auth()->user()?->can('event_customer.create') ?? false;
+    // }
 
-    public static function canDelete($record): bool
-    {
-        return auth()->user()?->hasRole('Admin') ?? false;
-    }
+    // public static function canDelete($record): bool
+    // {
+    //     return auth()->user()?->hasRole('Admin') ?? false;
+    // }
 
-    public static function canDeleteAny(): bool
-    {
-        return auth()->user()?->hasRole('Admin') ?? false;
-    }
+    // public static function canDeleteAny(): bool
+    // {
+    //     return auth()->user()?->hasRole('Admin') ?? false;
+    // }
 
-    public static function shouldRegisterNavigation(): bool
-    {
-        return optional(\Filament\Facades\Filament::getCurrentPanel())->getId() === 'public'
-            ? true
-            : (auth()->user()?->can('berkas.view') ?? false);
-    }
+    // public static function shouldRegisterNavigation(): bool
+    // {
+    //     return optional(\Filament\Facades\Filament::getCurrentPanel())->getId() === 'public'
+    //         ? true
+    //         : (auth()->user()?->can('event_customer.view') ?? false);
+    // }
 }

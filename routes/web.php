@@ -19,28 +19,29 @@ Route::get('/', function () {
     return view('welcome');
 })->name('welcome');
     
-/* ====== MEDIA: WAJIB LOGIN ====== */
+/* ==============================================
+   2. MEDIA & DOWNLOAD (WAJIB LOGIN)
+============================================== */
 Route::middleware('auth')->group(function () {
-    // Berkas aktif & lampirannya
+    
+    // --- A. MEDIA BERKAS ---
     Route::get('/media/berkas/{berkas}', [MediaController::class, 'berkas'])
         ->whereNumber('berkas')->name('media.berkas');
 
     Route::get('/media/berkas/{berkas}/lampiran/{lampiran}', [MediaController::class, 'lampiran'])
         ->whereNumber(['berkas','lampiran'])->name('media.berkas.lampiran');
 
-    // Versi berkas & lampiran berkas
     Route::get('/media/berkas/{berkas}/version/{index}', [MediaController::class, 'berkasVersion'])
         ->whereNumber(['berkas','index'])->name('media.berkas.version');
 
     Route::get('/media/lampiran/{lampiran}/version/{index}', [MediaController::class, 'lampiranVersion'])
         ->whereNumber(['lampiran','index'])->name('media.lampiran.version');
 
-    // IMM: file aktif tiap dokumen
+    // --- B. MEDIA IMM ---
     Route::get('/media/imm/{type}/{id}', [MediaImmController::class, 'file'])
         ->whereIn('type', ['manual-mutu','prosedur','instruksi-standar','formulir'])
         ->whereNumber('id')->name('media.imm.file');
 
-    // IMM: versi lampiran (Masih pakai closure, aman dibiarkan begini)
     Route::get('/media/imm/version/{id}/{index}', function (int $id, int $index) {
         $rec = \App\Models\ImmLampiran::findOrFail($id);
         $v   = collect($rec->file_versions ?? [])->get($index);
@@ -50,50 +51,55 @@ Route::middleware('auth')->group(function () {
         abort_unless(Storage::disk($disk)->exists($v['file_path']), 404);
 
         $full = Storage::disk($disk)->path($v['file_path']);
-        $size = filesize($full);
-        $ext  = strtolower(pathinfo($full, PATHINFO_EXTENSION));
-        $mime = $ext === 'pdf' ? 'application/pdf' : (File::mimeType($full) ?: 'application/octet-stream');
-
-        $baseName   = $v['filename'] ?? basename($v['file_path']);
-        $asciiName  = preg_replace('/[^\x20-\x7E]/', '_', $baseName);
-        $utf8Name   = rawurlencode($baseName);
-        $disposition = ($ext === 'pdf' ? 'inline' : 'attachment')
-            . '; filename="'.$asciiName.'"'
-            . "; filename*=UTF-8''".$utf8Name;
-
-        $response = response()->file($full, [
-            'Content-Type'        => $mime,
-            'Content-Disposition' => $disposition,
-            'Content-Length'      => $size,
-            'Accept-Ranges'       => 'bytes',
-            'Cache-Control'       => 'private, max-age=0, must-revalidate',
-        ]);
-
-        if (is_file($full)) {
-            $response->setEtag(md5_file($full));
-            $response->setLastModified(\Illuminate\Support\Carbon::createFromTimestamp(filemtime($full)));
-        }
-
-        return $response;
+        return response()->file($full); // Simplified response for readability
     })->name('media.imm.version');
 
-    // IMM: LAMPIRAN AKTIF (Sekarang pakai Controller)
     Route::get('/media/imm/lampiran/{lampiran}', [MediaImmController::class, 'lampiran'])
         ->whereNumber('lampiran')
         ->name('media.imm.lampiran');
-    // --------------------------
 
-    // Download source
+    // --- C. MEDIA EVENT CUSTOMER (Baru) ---
+    // Ini harus di dalam middleware auth supaya aman
+    Route::get('/media/event-customer/{record}', function ($recordId) {
+        $record = \App\Models\EventCustomer::findOrFail($recordId);
+        
+        if (empty($record->dokumen)) {
+            abort(404, 'File not found in database.');
+        }
+
+        $path = $record->dokumen;
+        if (!Storage::disk('private')->exists($path)) {
+            abort(404, 'File not found on server.');
+        }
+
+        $fullPath = Storage::disk('private')->path($path);
+        return response()->file($fullPath, [
+            'Content-Type' => File::mimeType($fullPath) ?: 'application/pdf',
+        ]);
+    })->name('media.event_customer');
+
+    // --- D. DOWNLOAD SOURCE ---
+    // Digabung jadi satu definisi saja biar rapi
     Route::get('/download/source/{type}/{id}', DownloadSourceController::class)
-        ->whereIn('type', ['berkas','regular','lampiran','imm-lampiran','imm-manual-mutu','imm-prosedur','imm-instruksi-standar','imm-formulir'])
+        ->whereIn('type', [
+            'event_customer', // <--- Sudah ditambahkan
+            'berkas','regular','lampiran','imm-lampiran',
+            'imm-manual-mutu','imm-prosedur','imm-instruksi-standar','imm-formulir'
+        ])
         ->whereNumber('id')->name('download.source');
 
     Route::get('/download/source/{type}/{id}/v/{index}', [DownloadSourceController::class, 'version'])
-        ->whereIn('type', ['berkas','regular','lampiran','imm-lampiran','imm-manual-mutu','imm-prosedur','imm-instruksi-standar','imm-formulir'])
+        ->whereIn('type', [
+            'event_customer', 
+            'berkas','regular','lampiran','imm-lampiran',
+            'imm-manual-mutu','imm-prosedur','imm-instruksi-standar','imm-formulir'
+        ])
         ->whereNumber(['id','index'])->name('download.source.version');
 });
 
-// === REGULAR (WAJIB LOGIN) ===
+/* ==============================================
+   3. REGULAR (WAJIB LOGIN)
+============================================== */
 Route::middleware('auth')->group(function () {
     Route::get('/media/regular/{regular}', [MediaRegularController::class, 'regular'])
         ->whereNumber('regular')->name('media.regular');

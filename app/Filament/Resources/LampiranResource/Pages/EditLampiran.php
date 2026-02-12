@@ -3,10 +3,12 @@
 namespace App\Filament\Resources\LampiranResource\Pages;
 
 use App\Filament\Resources\LampiranResource;
+use App\Filament\Resources\BerkasResource;
+use App\Filament\Resources\RegularResource;
+use App\Filament\Resources\EventCustomerResource;
 use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
 use Filament\Notifications\Notification;
-use App\Filament\Resources\BerkasResource;
 use Illuminate\Database\Eloquent\Model as EloquentModel;
 
 class EditLampiran extends EditRecord
@@ -20,6 +22,58 @@ class EditLampiran extends EditRecord
         ];
     }
 
+    // 1. Validasi saat Save
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        return LampiranResource::normalizeOwner($data);
+    }
+
+    // 2. Custom Breadcrumb untuk Edit
+    public function getBreadcrumbs(): array
+    {
+        $breadcrumbs = [];
+        $record = $this->getRecord();
+        $source = request('from'); // Tangkap parameter ?from=...
+
+        if ($source === 'event_customer' && $record->berkas_id) {
+            $url = EventCustomerResource::getUrl('edit', ['record' => $record->berkas_id]);
+            $breadcrumbs[$url] = 'Kembali ke Event Customer';
+        } elseif ($record->berkas_id) {
+            $url = BerkasResource::getUrl('edit', ['record' => $record->berkas_id]);
+            $breadcrumbs[$url] = 'Kembali ke Event';
+        } elseif ($record->regular_id) {
+            $url = RegularResource::getUrl('edit', ['record' => $record->regular_id]);
+            $breadcrumbs[$url] = 'Kembali ke Regular';
+        } else {
+            $breadcrumbs['#'] = 'Dokumen Pelengkap';
+        }
+
+        $breadcrumbs[] = 'Edit';
+
+        return $breadcrumbs;
+    }
+
+    // 3. Redirect setelah Edit selesai
+    protected function getRedirectUrl(): string
+    {
+        $source = request('from');
+
+        if ($source === 'event_customer' && $this->record->berkas_id) {
+             return EventCustomerResource::getUrl('index');
+        }
+
+        if ($this->record->berkas_id) {
+            return BerkasResource::getUrl('index');
+        } 
+
+        if ($this->record->regular_id) {
+            return RegularResource::getUrl('index');
+        }
+
+        return parent::getRedirectUrl();
+    }
+
+    // 4. Notifikasi jika file kosong (Opsional)
     public function mount($record): void
     {
         parent::mount($record);
@@ -31,31 +85,4 @@ class EditLampiran extends EditRecord
                 ->send();
         }
     }
-
-    protected function getRedirectUrl(): string
-    {
-        if ($this->record->berkas_id) {
-            return \App\Filament\Resources\BerkasResource::getUrl('index', [
-                'berkas_id' => $this->record->berkas_id,
-            ]);
-        } 
-        if ($this->record->regular_id) {
-            return \App\Filament\Resources\RegularResource::getUrl('index');
-        }
-        return \App\Filament\Resources\BerkasResource::getUrl('index');
-    }
-
-    protected function resolveRecord(string|int $key): EloquentModel
-    {
-        $model = static::getResource()::getModel();
-
-        // Ambil record langsung dari model UTAMA (tanpa join alias 'b')
-        return $model::query()->findOrFail($key);
-    }
-
-    protected function mutateFormDataBeforeSave(array $data): array
-    {
-        return \App\Filament\Resources\LampiranResource::normalizeOwner($data);
-    }
-
 }

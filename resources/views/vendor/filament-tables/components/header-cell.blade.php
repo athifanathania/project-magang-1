@@ -31,6 +31,7 @@
         @endif
         @class([
             'group flex w-full items-center gap-x-1',
+            'text-start', 
             'whitespace-nowrap' => ! $wrap,
             'whitespace-normal' => $wrap,
             match ($alignment) {
@@ -40,7 +41,7 @@
                 Alignment::Left => 'justify-start rtl:flex-row-reverse',
                 Alignment::Right => 'justify-end rtl:flex-row-reverse',
                 Alignment::Justify, Alignment::Between => 'justify-between',
-                default => $alignment,
+                default => 'justify-start', {{-- PERBAIKAN: Jangan return $alignment mentah, paksa justify-start --}}
             },
         ])
     >
