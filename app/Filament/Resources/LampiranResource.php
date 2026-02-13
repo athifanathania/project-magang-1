@@ -56,12 +56,16 @@ class LampiranResource extends Resource
                 ->label('Event / Project')
                 ->options(function () {
                     $berkas = \App\Models\Berkas::query()
+                        ->whereNotNull('nama') 
+                        ->where('nama', '!=', '') 
                         ->pluck('nama', 'id')
                         ->toArray();
 
                     $eventCustomer = \App\Models\EventCustomer::query()
-                        ->pluck('nama', 'id') 
-                        ->toArray(); 
+                        ->whereNotNull('nama')
+                        ->where('nama', '!=', '')
+                        ->pluck('nama', 'id')
+                        ->toArray();
 
                     return $berkas + $eventCustomer;
                 })
@@ -144,7 +148,7 @@ class LampiranResource extends Resource
                 
             Forms\Components\Select::make('regular_id')
                 ->label('Regular')
-                ->relationship('regular', 'nama')
+                ->relationship('regular', 'nama', fn ($query) => $query->whereNotNull('nama')) 
                 ->searchable()->preload()->live()
                 ->default(request('regular_id'))
                 ->hidden(fn (Forms\Get $get) => filled($get('berkas_id')) || filled(request('berkas_id')))
@@ -178,6 +182,7 @@ class LampiranResource extends Resource
                         $regularId = $get('regular_id') ?? request('regular_id');
 
                         return \App\Models\Lampiran::query()
+                            ->whereNotNull('nama') 
                             ->when($berkasId,  fn($q) => $q->where('berkas_id',  $berkasId))
                             ->when($regularId, fn($q) => $q->where('regular_id', $regularId))
                             ->when(!$berkasId && !$regularId, fn($q) => $q->whereRaw('1=0'))
@@ -197,25 +202,44 @@ class LampiranResource extends Resource
                 ->preload()
                 ->live() 
                 ->options(function (Forms\Get $get) {
-                    $berkasId = $get('berkas_id');
-                    if (! $berkasId) return [];
+                    $berkasId  = $get('berkas_id');
+                    $regularId = $get('regular_id'); // 1. Ambil ID Regular
 
-                    $entity = Berkas::find($berkasId) ?? EventCustomer::find($berkasId);
-                    
-                    if (! $entity) return [];
+                    // Jika keduanya kosong, return kosong
+                    if (! $berkasId && ! $regularId) return [];
 
-                    $customer = $entity->customer;
+                    $customerName = null;
 
-                    if (! $customer && ! empty($entity->cust_name)) {
-                        $customer = \App\Models\Customer::where('name', $entity->cust_name)->first();
+                    // A. Logika untuk Berkas / Event
+                    if ($berkasId) {
+                        $entity = \App\Models\Berkas::find($berkasId) ?? \App\Models\EventCustomer::find($berkasId);
+                        if ($entity) {
+                            $customerName = filled($entity->cust_name) ? $entity->cust_name : $entity->customer?->name;
+                        }
                     }
+                    // B. Logika untuk Regular (TAMBAHAN INI)
+                    elseif ($regularId) {
+                        $entity = \App\Models\Regular::find($regularId);
+                        if ($entity) {
+                            $customerName = filled($entity->cust_name) ? $entity->cust_name : $entity->customer?->name;
+                        }
+                    }
+
+                    // C. Jika nama customer tidak ketemu, return kosong
+                    if (blank($customerName)) return [];
+
+                    // D. Cari Customer Asli di database master Customer untuk ambil template
+                    $customer = \App\Models\Customer::where('name', $customerName)->first();
 
                     if (! $customer || empty($customer->document_templates)) {
                         return [];
                     }
 
-                    return collect($customer->document_templates)
-                        ->pluck('name', 'name')
+                    return collect($customer->document_templates ?? [])
+                        ->map(fn ($t) => trim((string) ($t['name'] ?? '')))
+                        ->filter()
+                        ->unique()
+                        ->mapWithKeys(fn ($name) => [$name => $name])
                         ->toArray();
                 })
                 ->createOptionForm([
@@ -224,42 +248,56 @@ class LampiranResource extends Resource
                         ->required(),
                 ])
                 ->createOptionUsing(function (array $data, Forms\Get $get) {
-                    $newDocName = $data['name'];
-                    $berkasId = $get('berkas_id');
+                    $newDocName = trim((string) ($data['name'] ?? ''));
+                    if (! filled($newDocName)) {
+                        return null;
+                    }
+                    $berkasId  = $get('berkas_id');
+                    $regularId = $get('regular_id');
 
-                    // 1. Pastikan ada Berkas/Event yang dipilih
+                    $customerName = null;
+
                     if ($berkasId) {
-                        $berkas = \App\Models\Berkas::find($berkasId);
+                        $entity = \App\Models\Berkas::find($berkasId) 
+                            ?? \App\Models\EventCustomer::find($berkasId);
 
-                        // 2. Cari Customer berdasarkan cust_name dari Berkas tersebut
-                        if ($berkas && $berkas->cust_name) {
-                            $customer = \App\Models\Customer::where('name', $berkas->cust_name)->first();
-
-                            if ($customer) {
-                                // 3. Ambil data template lama (handle jika null)
-                                $templates = $customer->document_templates ?? [];
-
-                                // 4. Cek apakah nama ini sudah ada (biar gak duplikat)
-                                $exists = collect($templates)->contains('name', $newDocName);
-
-                                if (! $exists) {
-                                    // 5. Tambahkan nama baru ke array dengan format Key: name
-                                    $templates[] = ['name' => $newDocName];
-
-                                    // 6. UPDATE ke database Customer
-                                    $customer->update(['document_templates' => $templates]);
-
-                                    // (Opsional) Kirim notifikasi kecil
-                                    \Filament\Notifications\Notification::make()
-                                        ->title('Disimpan ke Template Customer')
-                                        ->success()
-                                        ->send();
-                                }
-                            }
-                        }
+                        $customerName = $entity?->cust_name 
+                            ?? $entity?->customer?->name;
                     }
 
-                    // Return nama dokumen agar terpilih di field Select
+                    if ($regularId) {
+                        $entity = \App\Models\Regular::find($regularId);
+
+                        $customerName = $entity?->cust_name 
+                            ?? $entity?->customer?->name;
+                    }
+
+                    if (! $customerName) {
+                        return $newDocName;
+                    }
+
+                    $customer = \App\Models\Customer::where('name', $customerName)->first();
+
+                    if (! $customer) {
+                        return $newDocName;
+                    }
+
+                    $templates = collect($customer->document_templates ?? [])
+                        ->map(function ($t) {
+                            if (!is_array($t)) return null;
+                            $name = trim((string) ($t['name'] ?? ''));
+                            return $name !== '' ? ['name' => $name] : null;
+                        })
+                        ->filter()
+                        ->unique('name')
+                        ->values()
+                        ->all();
+
+                    if (! collect($templates)->contains('name', $newDocName)) {
+                        $templates[] = ['name' => $newDocName];
+                        $customer->update(['document_templates' => $templates]);
+                    }
+
                     return $newDocName;
                 }),
 
