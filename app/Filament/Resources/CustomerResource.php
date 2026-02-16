@@ -85,15 +85,18 @@ class CustomerResource extends Resource
                 //
             ])
             ->actions([
-                Tables\Actions\ViewAction::make()
-                    ->label('Lihat Detail'),
-                Tables\Actions\EditAction::make(),
-            ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                ]),
-            ]);
+            Tables\Actions\ViewAction::make()
+                ->label('Lihat Detail'),
+            
+            Tables\Actions\EditAction::make()
+                ->visible(fn () => auth()->user()?->hasRole(['Admin']) ?? false),
+        ])
+        ->bulkActions([
+            Tables\Actions\BulkActionGroup::make([
+                Tables\Actions\DeleteBulkAction::make()
+                    ->visible(fn () => auth()->user()?->hasRole(['Admin']) ?? false),
+            ]),
+        ]);
     }
 
     public static function infolist(Infolist $infolist): Infolist
@@ -147,5 +150,10 @@ class CustomerResource extends Resource
             'create' => Pages\CreateCustomer::route('/create'),
             'edit' => Pages\EditCustomer::route('/{record}/edit'),
         ];
+    }
+
+    public static function canCreate(): bool
+    {
+        return auth()->user()?->hasRole(['Admin', 'Editor']) ?? false;
     }
 }

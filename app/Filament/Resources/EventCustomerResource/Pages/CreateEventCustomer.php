@@ -9,9 +9,8 @@ class CreateEventCustomer extends CreateRecord
 {
     protected static string $resource = EventCustomerResource::class;
     
-    // Opsional: Redirect ke index setelah create
     protected function getRedirectUrl(): string
     {
-        return $this->getResource()::getUrl('index');
+        return $this->previousUrl ?? $this->getResource()::getUrl('index');
     }
 }

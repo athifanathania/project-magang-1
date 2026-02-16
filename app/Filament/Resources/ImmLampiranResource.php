@@ -214,7 +214,7 @@ class ImmLampiranResource extends Resource
                     ->directory('imm/lampiran')
                     ->previewable(true)
                     ->openable(false)
-                    ->visible(fn () => auth()->user()->hasAnyRole(['Admin', 'Editor']))
+                    ->visible(fn () => auth()->user()?->hasAnyRole(['Admin', 'Editor']) ?? false)
                     ->saveUploadedFileUsing(function (\Livewire\Features\SupportFileUploads\TemporaryUploadedFile $file) {
                         $disk = 'private'; $dir = 'imm/lampiran';
                         $orig = $file->getClientOriginalName();

@@ -487,34 +487,18 @@ class EventCustomerResource extends Resource
             ->orderByRaw('LOWER(model) ASC');
     }
 
-    // public static function canViewAny(): bool
-    // {
-    //     return optional(\Filament\Facades\Filament::getCurrentPanel())->getId() === 'public'
-    //         ? true
-    //         // Sesuaikan permission policy Anda, misal 'event_customer.view'
-    //         : (auth()->user()?->can('event_customer.view') ?? false);
-    // }
+    public static function canCreate(): bool
+    {
+        return auth()->user()?->hasRole(['Admin', 'Editor']) ?? false;
+    }
 
+    public static function canEdit(Model $record): bool
+    {
+        return auth()->user()?->hasRole(['Admin', 'Editor']) ?? false;
+    }
 
-    // public static function canCreate(): bool
-    // {
-    //     return auth()->user()?->can('event_customer.create') ?? false;
-    // }
-
-    // public static function canDelete($record): bool
-    // {
-    //     return auth()->user()?->hasRole('Admin') ?? false;
-    // }
-
-    // public static function canDeleteAny(): bool
-    // {
-    //     return auth()->user()?->hasRole('Admin') ?? false;
-    // }
-
-    // public static function shouldRegisterNavigation(): bool
-    // {
-    //     return optional(\Filament\Facades\Filament::getCurrentPanel())->getId() === 'public'
-    //         ? true
-    //         : (auth()->user()?->can('event_customer.view') ?? false);
-    // }
+    public static function canDelete(Model $record): bool
+    {
+        return auth()->user()?->hasRole('Admin') ?? false;
+    }
 }

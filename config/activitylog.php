@@ -22,6 +22,6 @@ return [
     'submit_empty_logs' => false,
     'cleaning' => [
         'strategy' => \Spatie\Activitylog\CleaningStrategies\OlderThanDays::class,
-        'settings' => ['days' => 180], // simpan 6 bulan
+        'settings' => ['days' => 90], // simpan 6 bulan
     ],
 ];

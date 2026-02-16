@@ -11,7 +11,7 @@ class CreateImmProsedur extends CreateRecord
 
     protected function getRedirectUrl(): string
     {
-        return $this->getResource()::getUrl('index');
+        return $this->previousUrl ?? $this->getResource()::getUrl('index');
     }
 
     protected function afterCreate(): void

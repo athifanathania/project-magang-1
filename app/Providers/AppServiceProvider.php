@@ -7,6 +7,7 @@ use Filament\Support\Facades\FilamentView;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Support\Facades\Artisan; 
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -37,6 +38,12 @@ class AppServiceProvider extends ServiceProvider
         );
 
         if (! app()->runningInConsole()) {
+            if (rand(1, 100) === 1) {
+                try {
+                    Artisan::call('activitylog:clean');
+                } catch (\Exception $e) {
+                }
+            }
             DB::listen(function ($query) {
                 if (request()->is('admin/berkas*')) {
                     Log::info('[SQL berkas]', [

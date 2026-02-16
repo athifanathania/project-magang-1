@@ -16,7 +16,7 @@ class CreateBerkas extends CreateRecord
     protected static string $resource = BerkasResource::class;
     protected function getRedirectUrl(): string
     {
-        return $this->getResource()::getUrl('index');
+        return $this->previousUrl ?? $this->getResource()::getUrl('index');
     }
 
     protected function handleRecordCreation(array $data): \Illuminate\Database\Eloquent\Model

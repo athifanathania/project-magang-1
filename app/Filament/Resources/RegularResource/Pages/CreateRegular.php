@@ -10,6 +10,11 @@ class CreateRegular extends CreateBerkas
 {
     protected static string $resource = RegularResource::class;
 
+    protected function getRedirectUrl(): string
+    {
+        return $this->previousUrl ?? $this->getResource()::getUrl('index');
+    }
+
     protected function afterCreate(): void
     {
         $rec = $this->record;
@@ -30,6 +35,6 @@ class CreateRegular extends CreateBerkas
             $rec->addVersionFromPath($target, basename($target), null, 'REV00');
         }
 
-        $this->redirect($this->getResource()::getUrl('index'), navigate: true);
+        // $this->redirect($this->getResource()::getUrl('index'), navigate: true);
     }
 }

@@ -13,36 +13,39 @@ class CreateLampiran extends CreateRecord
 {
     protected static string $resource = LampiranResource::class;
 
-    // 1. Validasi: Pastikan hanya satu owner yang terpilih (Berkas ATAU Regular)
+    public $storedPreviousUrl = null;
+
+    public function mount(): void
+    {
+        $this->storedPreviousUrl = url()->previous();
+        parent::mount();
+    }
+
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        // Fungsi normalizeOwner WAJIB ada di LampiranResource.php (sesuai diskusi sebelumnya)
         return LampiranResource::normalizeOwner($data);
     }
 
-    // 2. Breadcrumb: Agar teks navigasi di kiri atas sesuai asal halaman
     public function getBreadcrumbs(): array
     {
         $breadcrumbs = [];
-        $source = request('from'); // Menangkap parameter ?from=...
+        $source = request('from');
         
         $berkasId = request('berkas_id');
         $regularId = request('regular_id');
 
         if ($source === 'event_customer' && $berkasId) {
-            // Jika datang dari Event Customer
             $url = EventCustomerResource::getUrl('edit', ['record' => $berkasId]);
             $breadcrumbs[$url] = 'Kembali ke Event Customer';
         } elseif ($berkasId) {
-            // Default ke Berkas biasa
             $url = BerkasResource::getUrl('edit', ['record' => $berkasId]); 
             $breadcrumbs[$url] = 'Kembali ke Event';
         } elseif ($regularId) {
-            // Jika dari Regular
-            $url = RegularResource::getUrl('edit', ['record' => $regularId]);
+            $url = ($this->storedPreviousUrl && str_contains($this->storedPreviousUrl, 'regular')) 
+                    ? $this->storedPreviousUrl 
+                    : RegularResource::getUrl('index');
             $breadcrumbs[$url] = 'Kembali ke Regular';
         } else {
-            // Default jika akses langsung
             $breadcrumbs['#'] = 'Dokumen Pelengkap';
         }
 
@@ -51,31 +54,27 @@ class CreateLampiran extends CreateRecord
         return $breadcrumbs;
     }
 
-    // 3. Redirect: Setelah save mau dibawa kemana?
     protected function getRedirectUrl(): string
     {
-        // Ambil ID dari request URL atau dari data record yang baru disimpan
         $berkasId  = request('berkas_id')  ?? data_get($this->record, 'berkas_id');
         $regularId = request('regular_id') ?? data_get($this->record, 'regular_id');
         $source    = request('from'); 
 
-        // JIKA DARI EVENT CUSTOMER
         if ($source === 'event_customer' && $berkasId) {
-            // Redirect ke Index Event Customer (atau Edit jika mau)
             return EventCustomerResource::getUrl('index'); 
         }
 
-        // JIKA DARI BERKAS BIASA
         if ($berkasId) {
-            // Redirect ke Edit Berkas, tab/parameter openLampiran opsional
             return BerkasResource::getUrl('index', [
-                'openLampiran' => 1, // Parameter opsional jika kamu punya logika tab
+                'openLampiran' => 1, 
                 'berkas_id'    => $berkasId,
             ]);
         }
 
-        // JIKA DARI REGULAR
         if ($regularId) {
+            if ($this->storedPreviousUrl && str_contains($this->storedPreviousUrl, 'regular') && !str_contains($this->storedPreviousUrl, 'create')) {
+                return $this->storedPreviousUrl;
+            }
             return RegularResource::getUrl('index');
         }
 
